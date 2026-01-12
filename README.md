@@ -1,4 +1,4 @@
-# Music Downloader
+# TrueTrack
 
 A CLI-based backend pipeline for **resolving user intent, downloading audio, applying canonical metadata, and organizing a local music library**.
 
