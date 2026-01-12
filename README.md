@@ -140,3 +140,7 @@ Users are responsible for ensuring they have the right to download and store any
 **Version:** v1 (stabilization complete)
 Core architecture is stable; future versions may improve heuristics, UX polish, and automation.
 
+---
+
+Made with ❤️ by **Rouge Coders**
+
