@@ -43,3 +43,30 @@ def score_candidate(candidate: dict, artist: str) -> tuple[int, list[str]]:
         reasons.append("suspiciously long duration")
 
     return score, reasons
+
+def score_metadata(
+    result: dict,
+    expected_title: str,
+    expected_artist: str,
+    expected_duration: int,
+) -> tuple[int, list[str]]:
+    score = 0
+    reasons = []
+
+    # title match
+    if expected_title.lower() in result.get("trackName", "").lower():
+        score += 40
+        reasons.append("title match")
+
+    # artist match
+    if expected_artist.lower() in result.get("artistName", "").lower():
+        score += 40
+        reasons.append("artist match")
+
+    # duration match
+    actual = result.get("trackTimeMillis")
+    if actual and abs(actual / 1000 - expected_duration) < 5:
+        score += 20
+        reasons.append("duration match")
+
+    return score, reasons

@@ -1,7 +1,9 @@
 import os
 import shutil
 
-LIBRARY_ROOT = "/home/vicky/Music/library"
+from core.config import Config
+
+LIBRARY_ROOT = Config.LIBRARY_ROOT
 
 
 def ensure_dir(path: str):

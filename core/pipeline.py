@@ -1,26 +1,35 @@
 from typing import Callable, Dict
-from core.states import PipelineState
-from core.job import Job
-import json
-from core.states import PipelineState
-from core.job import Job
-from core.scoring import score_candidate
+import requests
 import subprocess
+import json
 import os
+import shutil
+
+from ytmusicapi import YTMusic
+from core.job import IdentityHint
+from core.states import PipelineState
+
+from core.states import PipelineState
+from core.job import Job
+from core.scoring import score_metadata
+
 from utils.paths import ensure_job_temp_dir
-from utils.metadata import search_itunes, score_metadata
+from utils.metadata import search_itunes
+from utils.storage import ensure_dir, safe_filename, LIBRARY_ROOT
+from utils.tagging import fetch_album_art
+from utils.logging import step
+
 from mutagen.id3 import (
     ID3,
     TIT2, TPE1, TALB, TPE2,
     TRCK, TDRC, APIC,
 )
 from mutagen.mp3 import MP3
-from utils.storage import ensure_dir, safe_filename, LIBRARY_ROOT
-import os
-import shutil
-from utils.tagging import fetch_album_art
-from utils.logging import section, step, list_item
 
+
+# =========================
+# Errors
+# =========================
 
 class PipelineError(Exception):
     def __init__(self, code: str, message: str):
@@ -28,112 +37,228 @@ class PipelineError(Exception):
         self.message = message
         super().__init__(message)
 
+
+# =========================
+# Pipeline Core
+# =========================
+
 class Pipeline:
-    def __init__(self):
+    def __init__(self, renderer=None):
         self.handlers: Dict[PipelineState, Callable[[Job], None]] = {}
+        self.renderer = renderer   # ✅ DEFINED HERE
 
     def register(self, state: PipelineState, handler: Callable[[Job], None]):
         self.handlers[state] = handler
 
     def run(self, job: Job):
+        
+        def flush_message():
+            if self.renderer and job.last_message:
+                self.renderer.info(job.last_message)
+                job.last_message = None
         try:
             while True:
-                current = job.current_state
+                state = job.current_state
     
-                if current in (PipelineState.FINALIZED, PipelineState.FAILED):
+                if state in (PipelineState.FINALIZED, PipelineState.FAILED):
+                    flush_message()
                     break
     
-                handler = self.handlers.get(current)
-                if handler is None:
+                handler = self.handlers.get(state)
+                if not handler:
                     raise PipelineError(
                         "NO_HANDLER",
-                        f"No handler registered for state {current.name}"
+                        f"No handler registered for state {state.name}"
                     )
     
-                prev_state = job.current_state
+                prev = job.current_state
+                
+                if state == PipelineState.USER_INTENT_SELECTION:
+                    if not self.renderer:
+                        raise PipelineError("NO_RENDERER", "Intent selection requires renderer")
+                
+                    idx = self.renderer.request_intent_selection(
+                        job.identity_candidates
+                    )
+                
+                    if idx is None:
+                        job.fail("USER_ABORT", "User cancelled intent selection")
+                        break
+                
+                    chosen = job.identity_candidates[idx]
+                
+                    job.identity_hint = IdentityHint(
+                        title=chosen.get("title"),
+                        artists=[a["name"] for a in chosen.get("artists", [])],
+                        album=chosen.get("album", {}).get("name"),
+                        duration_ms=chosen.get("duration_seconds", 0) * 1000 if chosen.get("duration_seconds") else None,
+                        video_id=chosen.get("videoId"),
+                        uploader=chosen.get("artists", [{}])[0].get("name"),
+                        confidence=100,   # user = truth
+                    )
+                
+                    job.transition_to(PipelineState.SEARCHING)
+                    self.renderer.on_state_change(job.current_state)
+                    continue
+    
+                # 🔥 SPECIAL CASE: USER_SELECTION
+                if state == PipelineState.USER_INTENT_SELECTION:
+                    if not self.renderer:
+                        raise PipelineError(
+                            "NO_RENDERER",
+                            "User selection required but no renderer available"
+                        )
+    
+                    choice = self.renderer.request_user_selection(
+                        job.metadata_candidates
+                    )
+    
+                    # Cancel
+                    if choice is None:
+                        job.fail("USER_ABORT", "User cancelled selection")
+                        break
+    
+                    selected = job.metadata_candidates[choice]
+                    job.final_metadata = selected
+                    job.metadata_confidence = 100  # user = ground truth
+                    job.transition_to(PipelineState.TAGGING)
+                    
+                    if self.renderer:
+                        self.renderer.on_state_change(job.current_state)
+                    
+                    flush_message()
+                    continue
+    
+                # 🧠 NORMAL HANDLER FLOW
                 handler(job)
     
-                if job.current_state == prev_state:
+                if job.current_state == prev:
                     raise PipelineError(
                         "NO_STATE_CHANGE",
-                        f"Handler for {prev_state.name} did not advance state"
+                        f"Handler for {prev.name} did not advance state"
                     )
+    
+                if self.renderer:
+                    self.renderer.on_state_change(job.current_state)
+                
+                flush_message()
     
         except PipelineError as e:
             job.fail(e.code, e.message)
+            job.result.error = e.message
+
+# =========================
+# Handlers
+# =========================
 
 def handle_init(job: Job):
-    job.transition_to(PipelineState.SEARCHING)
+    job.transition_to(PipelineState.RESOLVING_IDENTITY)
 
 
-def handle_searching(job: Job):
-    query = job.normalized_query
-    search_term = f"ytsearch5:{query}"
+# -------------------------------------------------
+# 1. RESOLVING_IDENTITY (YTMusic heuristic)
+# -------------------------------------------------
 
-    cmd = [
-        "yt-dlp",
-        search_term,
-        "--dump-json",
-        "--no-playlist",
-        "--quiet",
-    ]
+def handle_resolving_identity(job: Job):
+    ytmusic = YTMusic()
 
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
+        results = ytmusic.search(job.raw_query, filter="songs")
+    except Exception as e:
+        raise PipelineError("YTMUSIC_ERROR", f"Search failed: {e}")
+
+    if not results:
+        raise PipelineError("NO_IDENTITY", "YTMusic returned no results")
+
+    # Limit for UX + determinism
+    candidates = results[:5]
+    job.identity_candidates = candidates
+
+    # -----------------------------
+    # Ambiguity heuristic (simple)
+    # -----------------------------
+    def is_ambiguous(candidates, query: str) -> bool:
+        if len(candidates) <= 1:
+            return False
+
+        query_lower = query.lower()
+
+        # If artist name not mentioned in query → ambiguity risk
+        top_artists = [
+            a["name"].lower()
+            for a in candidates[0].get("artists", [])
+        ]
+
+        artist_in_query = any(a in query_lower for a in top_artists)
+
+        return not artist_in_query
+
+    # --------------------------------
+    # EARLY INTENT SELECTION
+    # --------------------------------
+    if job.options.ask or is_ambiguous(candidates, job.raw_query):
+        job.transition_to(PipelineState.USER_INTENT_SELECTION)
+        return
+
+    # --------------------------------
+    # AUTO-PICK TOP RESULT
+    # --------------------------------
+    top = candidates[0]
+
+    job.identity_hint = IdentityHint(
+        title=top.get("title"),
+        artists=[a["name"] for a in top.get("artists", [])],
+        album=top.get("album", {}).get("name"),
+        duration_ms=(
+            top.get("duration_seconds", 0) * 1000
+            if top.get("duration_seconds")
+            else None
+        ),
+        video_id=top.get("videoId"),
+        uploader=top.get("artists", [{}])[0].get("name"),
+        confidence=80,  # heuristic confidence
+    )
+
+    # IMPORTANT: downstream stages rely ONLY on identity_hint
+    job.transition_to(PipelineState.SEARCHING)
+
+# -------------------------------------------------
+# 2. SEARCHING_MEDIA (deterministic yt-dlp target)
+# -------------------------------------------------
+
+def handle_searching(job: Job):
+    if not job.identity_hint:
+        raise PipelineError(
+            "NO_IDENTITY_HINT",
+            "SEARCHING reached without resolved identity"
         )
-    except subprocess.CalledProcessError as e:
-        raise PipelineError("SEARCH_FAILED", e.stderr.strip())
 
-    candidates = []
-    for line in result.stdout.splitlines():
-        data = json.loads(line)
-
-        candidates.append({
-            "url": data.get("webpage_url"),
-            "title": data.get("title"),
-            "duration": data.get("duration"),
-            "uploader": data.get("uploader"),
-        })
-
-    if not candidates:
-        raise PipelineError("NO_RESULTS", "No search results found")
-        
-    artist_guess = job.raw_query.split("-")[-1].strip()
-    
-    scored = []
-    for c in candidates:
-        score, reasons = score_candidate(c, artist_guess)
-        c["score"] = score
-        c["score_reasons"] = reasons
-        scored.append(c)
-    
-    # sort by score descending
-    scored.sort(key=lambda x: x["score"], reverse=True)
-    
-    job.source_candidates = scored
-    job.selected_source = scored[0]
-    
-    print("\n📊 SCORING RESULTS")
-    print("-" * 40)
-    
-    for i, c in enumerate(scored, start=1):
-        print(f"{i}. {c['title']}")
-        print(f"   score   : {c['score']}")
-        print(f"   reasons : {c['score_reasons']}")
-        print()
-        
+    job.selected_source = {
+        "url": f"https://www.youtube.com/watch?v={job.identity_hint.video_id}",
+        "title": job.identity_hint.title,
+        "duration": (job.identity_hint.duration_ms or 0) // 1000,
+        "uploader": job.identity_hint.uploader,
+    }
+    job.source_candidates = [job.selected_source]
     job.transition_to(PipelineState.DOWNLOADING)
 
-def handle_downloading(job):
-    step("DOWNLOADING", job.selected_source["title"])
-    if not job.selected_source:
-        raise PipelineError("NO_SOURCE", "No source selected for download")
+# -------------------------------------------------
+# 3. DOWNLOADING
+# -------------------------------------------------
 
-    url = job.selected_source["url"]
+def handle_downloading(job: Job):
+    
+    if job.options.dry_run:
+        job.emit("Dry run enabled — skipping download")
+        job.transition_to(PipelineState.FINALIZED)
+        job.result.success = True
+        job.result.title = job.identity_hint.title if job.identity_hint else job.query
+        job.result.artist = "Unknown"
+        job.result.source = "dry-run"
+        job.result.path = "(not written)"
+        return
+
+    job.emit(f"Downloading audio: {job.selected_source['title']}")
 
     temp_dir = ensure_job_temp_dir(job.job_id)
     job.temp_dir = temp_dir
@@ -142,7 +267,7 @@ def handle_downloading(job):
 
     cmd = [
         "yt-dlp",
-        url,
+        job.selected_source["url"],
         "-f", "bestaudio",
         "--extract-audio",
         "--audio-quality", "0",
@@ -150,44 +275,53 @@ def handle_downloading(job):
         "--quiet",
     ]
 
+    stdout = None
+    stderr = None
+    
+    if not job.options.verbose:
+        stdout = subprocess.DEVNULL
+        stderr = subprocess.DEVNULL
+    
     try:
-        subprocess.run(cmd, check=True)
-    except subprocess.CalledProcessError as e:
-        raise PipelineError("DOWNLOAD_FAILED", str(e))
+        subprocess.run(
+            cmd,
+            check=True,
+            stdout=stdout,
+            stderr=stderr,
+        )
+    except subprocess.CalledProcessError:
+        raise PipelineError("DOWNLOAD_FAILED", "yt-dlp failed to download audio")
 
-    # find downloaded file
     files = os.listdir(temp_dir)
     if not files:
         raise PipelineError("NO_FILE", "yt-dlp produced no output")
 
     if len(files) > 1:
-        raise PipelineError("MULTIPLE_FILES", "Unexpected multiple downloaded files")
+        raise PipelineError("MULTIPLE_FILES", "Unexpected multiple files")
 
     job.downloaded_file = os.path.join(temp_dir, files[0])
-
     job.transition_to(PipelineState.EXTRACTING)
-    
-def handle_extracting(job):
-    step("EXTRACTING", os.path.basename(job.downloaded_file))
-    if not job.downloaded_file:
-        raise PipelineError("NO_DOWNLOADED_FILE", "No file to extract")
+
+
+# -------------------------------------------------
+# 4. EXTRACTING
+# -------------------------------------------------
+
+def handle_extracting(job: Job):
+    job.emit(f"Processing audio: {os.path.basename(job.downloaded_file)}")
 
     input_path = job.downloaded_file
     temp_dir = job.temp_dir
 
-    if not os.path.exists(input_path):
-        raise PipelineError("MISSING_INPUT_FILE", input_path)
-
-    # derive output path
-    base_name, _ = os.path.splitext(os.path.basename(input_path))
-    output_path = os.path.join(temp_dir, f"{base_name}.mp3")
+    base, _ = os.path.splitext(os.path.basename(input_path))
+    output_path = os.path.join(temp_dir, f"{base}.mp3")
 
     cmd = [
         "ffmpeg",
-        "-y",                # overwrite if exists
-        "-i", input_path,    # input file
-        "-vn",               # no video
-        "-ab", "320k",       # audio bitrate
+        "-y",
+        "-i", input_path,
+        "-vn",
+        "-ab", "320k",
         output_path,
     ]
 
@@ -205,32 +339,45 @@ def handle_extracting(job):
         raise PipelineError("NO_OUTPUT_FILE", "ffmpeg produced no output")
 
     job.extracted_file = output_path
-
-    # IMPORTANT: advance state
     job.transition_to(PipelineState.MATCHING_METADATA)
-    
-def handle_matching_metadata(job):
-    if not job.extracted_file:
-        raise PipelineError("NO_AUDIO", "No extracted audio for metadata")
 
-    # derive expectations
-    raw = job.raw_query.split("-")
-    expected_title = raw[0].strip()
-    expected_artist = raw[1].strip() if len(raw) > 1 else ""
 
-    duration = job.selected_source.get("duration", 0)
+# -------------------------------------------------
+# 5. MATCHING_METADATA (iTunes canonical)
+# -------------------------------------------------
 
-    results = search_itunes(expected_title, expected_artist)
+def handle_matching_metadata(job: Job):
+    hint = job.identity_hint
+    if not hint:
+        raise PipelineError("NO_IDENTITY_HINT", "Missing identity hint")
+        
+    if job.options.force_archive:
+        job.emit("Metadata matching skipped (force archive)")
+        job.transition_to(PipelineState.ARCHIVING)
+        return
+
+    # ✅ identity comes from YTMusic
+    title = hint.title
+    artist = ", ".join(hint.artists)
+    duration = (hint.duration_ms or 0) // 1000
+
+    try:
+        results = search_itunes(title, artist)
+    except requests.RequestException as e:
+        job.emit("iTunes search failed, falling back to archive")
+        job.transition_to(PipelineState.ARCHIVING)
+        return
 
     if not results:
-        raise PipelineError("NO_METADATA", "No metadata candidates found")
+        job.transition_to(PipelineState.ARCHIVING)
+        return
 
     scored = []
     for r in results:
         score, reasons = score_metadata(
             r,
-            expected_title,
-            expected_artist,
+            title,
+            artist,
             duration,
         )
         r["_score"] = score
@@ -238,72 +385,65 @@ def handle_matching_metadata(job):
         scored.append(r)
 
     scored.sort(key=lambda x: x["_score"], reverse=True)
+    best = scored[0]
 
     job.metadata_candidates = scored
-    job.final_metadata = scored[0]
-    job.metadata_confidence = scored[0]["_score"]
-
-    if job.metadata_confidence < 60:
-        raise PipelineError(
-            "LOW_CONFIDENCE",
-            f"Metadata confidence too low ({job.metadata_confidence})"
-        )
-
-    job.transition_to(PipelineState.TAGGING)
+    job.final_metadata = best
+    job.metadata_confidence = best["_score"]
     
-def handle_tagging(job):
-    if not job.extracted_file:
-        raise PipelineError("NO_AUDIO", "No extracted MP3 to tag")
+    if best["_score"] < 60:
+        job.transition_to(PipelineState.USER_METADATA_SELECTION)
+    
+    job.transition_to(PipelineState.TAGGING)
 
-    if not job.final_metadata:
-        raise PipelineError("NO_METADATA", "No metadata available for tagging")
+# -------------------------------------------------
+# 6. TAGGING
+# -------------------------------------------------
 
-    audio_path = job.extracted_file
+def handle_tagging(job: Job):
     meta = job.final_metadata
+    audio_path = job.extracted_file
 
-    # Load MP3 + ID3
     audio = MP3(audio_path, ID3=ID3)
-
     if audio.tags is None:
         audio.add_tags()
 
-    # Core tags
     audio.tags.add(TIT2(encoding=3, text=meta["trackName"]))
-    audio.tags.add(TPE1(encoding=3, text=meta["artistName"]))       # Artist
-    audio.tags.add(TPE2(encoding=3, text=meta["artistName"]))       # Album Artist
-    audio.tags.add(TALB(encoding=3, text=meta["collectionName"]))   # Album
+    audio.tags.add(TPE1(encoding=3, text=meta["artistName"]))
+    audio.tags.add(TPE2(encoding=3, text=meta["artistName"]))
+    audio.tags.add(TALB(encoding=3, text=meta["collectionName"]))
 
-    # Track number
-    track_no = meta.get("trackNumber")
-    if track_no:
-        audio.tags.add(TRCK(encoding=3, text=str(track_no)))
+    if meta.get("trackNumber"):
+        audio.tags.add(TRCK(encoding=3, text=str(meta["trackNumber"])))
 
-    # Year
-    release_date = meta.get("releaseDate", "")
-    if release_date:
-        year = release_date.split("-")[0]
+    if meta.get("releaseDate"):
+        year = meta["releaseDate"].split("-")[0]
         audio.tags.add(TDRC(encoding=3, text=year))
 
-    # Album art
-    art_bytes = fetch_album_art(meta)
-    if art_bytes:
-        audio.tags.add(
-            APIC(
-                encoding=3,
-                mime="image/jpeg",
-                type=3,  # front cover
-                desc="Cover",
-                data=art_bytes,
+    try:
+        art = fetch_album_art(meta)
+        if art:
+            audio.tags.add(
+                APIC(
+                    encoding=3,
+                    mime="image/jpeg",
+                    type=3,
+                    desc="Cover",
+                    data=art,
+                )
             )
-        )
+    except requests.RequestException as e:
+        job.emit("Could not fetch album art")
 
     audio.save()
-
-    # advance pipeline
     job.transition_to(PipelineState.STORING)
-    
-def handle_storage(job):
-    step("STORING", job.final_path)
+
+
+# -------------------------------------------------
+# 7. STORING
+# -------------------------------------------------
+
+def handle_storage(job: Job):
     if not job.extracted_file:
         raise PipelineError("NO_AUDIO", "No audio file to store")
 
@@ -312,17 +452,14 @@ def handle_storage(job):
 
     meta = job.final_metadata
 
-    artist = safe_filename(meta["artistName"])
-    album = safe_filename(meta["collectionName"])
+    # flat library root
+    ensure_dir(LIBRARY_ROOT)
+
     title = safe_filename(meta["trackName"])
-
-    artist_dir = os.path.join(LIBRARY_ROOT, artist)
-    album_dir = os.path.join(artist_dir, album)
-
-    ensure_dir(album_dir)
+    artist = safe_filename(meta["artistName"])
 
     filename = f"{title} - {artist}.mp3"
-    final_path = os.path.join(album_dir, filename)
+    final_path = os.path.join(LIBRARY_ROOT, filename)
 
     if os.path.exists(final_path):
         raise PipelineError(
@@ -333,35 +470,82 @@ def handle_storage(job):
     shutil.move(job.extracted_file, final_path)
 
     job.final_path = final_path
+    
+    job.result.success = True
+    job.result.title = meta["trackName"]
+    job.result.artist = meta["artistName"]
+    job.result.album = meta.get("collectionName")
+    job.result.source = "iTunes (verified)"
+    job.result.path = final_path
+    
     job.transition_to(PipelineState.FINALIZED)
 
-def inspect_candidates(job):
-    print("\n" + "=" * 60)
-    print("🔍 SEARCH INSPECTION")
-    print("=" * 60)
+def handle_metadata_user_selection(job: Job):
+    """
+    Blocking state.
+    User choice is handled by Pipeline + Renderer.
+    """
+    return
 
-    for idx, c in enumerate(job.source_candidates, start=1):
-        title = c.get("title", "")
-        uploader = c.get("uploader", "unknown")
-        duration = c.get("duration", 0)
+def handle_archiving(job: Job):
+    step("ARCHIVING", "No reliable iTunes metadata")
 
-        t = title.lower()
-        flags = []
+    if not job.extracted_file:
+        raise PipelineError("NO_AUDIO", "No extracted file to archive")
 
-        if "official" in t:
-            flags.append("official")
-        if "lyrics" in t:
-            flags.append("lyrics")
-        if "live" in t:
-            flags.append("live")
-        if "remaster" in t:
-            flags.append("remaster")
+    if not job.identity_hint:
+        raise PipelineError("NO_IDENTITY_HINT", "Cannot archive without identity hint")
 
-        flag_str = ", ".join(flags) if flags else "none"
+    hint = job.identity_hint
 
-        print(f"{idx:>2}. {title}")
-        print(f"    • uploader : {uploader}")
-        print(f"    • duration : {duration}s")
-        print(f"    • flags    : {flag_str}")
-        print("-" * 60)
+    # -------- Tag using identity hint only --------
+    audio = MP3(job.extracted_file, ID3=ID3)
 
+    if audio.tags is None:
+        audio.add_tags()
+
+    title = hint.title
+    artists = ", ".join(hint.artists) if hint.artists else "Unknown Artist"
+    album = hint.album or "Unknown Album"
+
+    audio.tags.add(TIT2(encoding=3, text=title))
+    audio.tags.add(TPE1(encoding=3, text=artists))
+    audio.tags.add(TPE2(encoding=3, text=hint.artists[0] if hint.artists else artists))
+    audio.tags.add(TALB(encoding=3, text=album))
+
+    audio.save()
+
+    # -------- Store in _Unidentified --------
+    archive_dir = os.path.join(LIBRARY_ROOT, "_Unidentified")
+    ensure_dir(archive_dir)
+
+    safe_title = safe_filename(title)
+    safe_artist = safe_filename(hint.artists[0]) if hint.artists else "Unknown"
+
+    filename = f"{safe_title} - {safe_artist}.mp3"
+    final_path = os.path.join(archive_dir, filename)
+
+    if os.path.exists(final_path):
+        raise PipelineError("FILE_EXISTS", final_path)
+
+    shutil.move(job.extracted_file, final_path)
+
+    job.final_path = final_path
+    job.metadata_confidence = 0
+    
+    job.result.archived = True
+    job.result.title = title
+    job.result.artist = artists
+    job.result.album = album
+    job.result.reason = "No reliable iTunes metadata"
+    job.result.path = final_path
+
+    job.transition_to(PipelineState.FINALIZED)
+
+def run(self, job: Job, renderer=None):
+    ...
+
+def handle_user_intent_selection(job: Job):
+    # Blocking state.
+    # Actual user choice is handled by Pipeline.run + renderer.
+    return

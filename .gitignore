@@ -1,7 +1,71 @@
+# -----------------------------
+# Python bytecode / caches
+# -----------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# -----------------------------
+# Virtual environments
+# -----------------------------
 .venv/
+venv/
+env/
 
-*/__pycache__
+# -----------------------------
+# uv / build artifacts
+# -----------------------------
+.build/
+.dist/
+*.egg-info/
 
-__pycache__
+# -----------------------------
+# OS / editor noise
+# -----------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
 
+# -----------------------------
+# Logs
+# -----------------------------
+*.log
+
+# -----------------------------
+# Music / media files (CRITICAL)
+# -----------------------------
+*.mp3
+*.m4a
+*.opus
+*.wav
+*.flac
+*.aac
+
+# Default library folder (never commit music)
+Music/
+music/
+_library/
+_Unidentified/
+
+# -----------------------------
+# Temp / scratch
+# -----------------------------
 scratch.py
+tmp/
+temp/
+
+# -----------------------------
+# Test artifacts
+# -----------------------------
+.coverage
+htmlcov/
+
+# -----------------------------
+# Environment variables
+# -----------------------------
+.env
+.env.*
