@@ -3,6 +3,9 @@ def render_summary(job):
 
     print()  # spacing
 
+    # -------------------------
+    # Success
+    # -------------------------
     if result.success:
         print("✔ Added to library")
         print("────────────────────────")
@@ -13,8 +16,23 @@ def render_summary(job):
         if result.source:
             print(f"Metadata: {result.source}")
         print(f"Path    : {result.path}")
+        return
 
-    elif result.archived:
+    # -------------------------
+    # File already exists
+    # -------------------------
+    if job.error_code == "FILE_EXISTS":
+        print("⚠ Track already exists")
+        print("──────────────────────")
+        if result.path:
+            print(f"Path : {result.path}")
+        print("Hint : Delete/rename the file, or use --force-archive")
+        return
+
+    # -------------------------
+    # Archived (fallback)
+    # -------------------------
+    if result.archived:
         print("⚠ Archived (unverified metadata)")
         print("───────────────────────────────")
         print(f"Title   : {result.title}")
@@ -22,10 +40,17 @@ def render_summary(job):
         if result.reason:
             print(f"Reason  : {result.reason}")
         print(f"Path    : {result.path}")
+        return
 
-    else:
-        print("✖ Import failed")
-        print("───────────────")
-        if result.error:
-            print(f"Reason : {result.error}")
-        print("Hint   : Try --ask or --force-archive")
+    # -------------------------
+    # Generic failure
+    # -------------------------
+    print("✖ Import failed")
+    print("───────────────")
+
+    if job.error_message:
+        print(f"Reason : {job.error_message}")
+    elif result.error:
+        print(f"Reason : {result.error}")
+
+    print("Hint   : Try --ask or --force-archive")
