@@ -1,30 +1,85 @@
 # TrueTrack
 
-A CLI-based backend pipeline for **resolving user intent, downloading audio, applying canonical metadata, and organizing a local music library**.
+**TrueTrack** is a production-grade backend system for **resolving music intent, downloading audio, applying canonical metadata, and organizing a local music library**.
 
-The system is designed to prioritize **correctness over blind automation** by resolving ambiguous song intent *before* download and only requesting user input when confidence is low.
+It is built around a **state-machine–driven pipeline** and a **background worker architecture**, prioritizing **correctness, observability, and resilience** over blind automation.
+
+The system resolves ambiguous intent *before* committing to downloads and only requests user input when confidence is insufficient.
+
+---
+
+## Core Concepts
+
+TrueTrack is designed around three principles:
+
+1. **Intent before action**
+   Ambiguous queries are resolved *before* download to prevent silent misidentification.
+
+2. **Deterministic pipelines**
+   Each job advances one explicit state at a time, making progress observable, debuggable, and restart-safe.
+
+3. **Resilient execution**
+   Failures are isolated, retried with backoff when appropriate, and never block the API.
+
+---
+
+## Architecture Overview (v2)
+
+TrueTrack is split into three independent layers:
+
+```
+api/        → HTTP interface (job creation, status, user input, cancellation)
+worker/     → Background worker executing pipeline steps
+core/       → Pure pipeline logic and state machine
+```
+
+### Key Properties
+
+* **API-first** (non-blocking, asynchronous)
+* **Background workers** (step-based execution)
+* **Persistent jobs** (SQLite)
+* **Locking + retries** (safe under crashes)
+* **Pause/resume via USER_* states**
+* **Idempotent job creation**
+* **Cancellation support**
 
 ---
 
 ## Features
 
-* **Early Intent Resolution**
-  Ambiguous queries trigger a user selection step *before download*, preventing silent misidentification.
+### ✅ Intent Resolution
 
-* **High-Quality Audio Ingestion**
-  Downloads best available audio streams via `yt-dlp` and converts them to high-quality MP3.
+* Uses YouTube Music search to resolve candidate tracks
+* Pauses for user input when confidence is low
+* Prevents incorrect downloads caused by ambiguous queries
 
-* **Canonical Metadata Matching**
-  Fetches official metadata and album art from iTunes when confidence is sufficient.
+### ✅ High-Quality Audio Ingestion
 
-* **Smart Tagging**
-  Embeds ID3 tags including title, artist, album, year, and album art.
+* Downloads best available audio using `yt-dlp`
+* Converts to high-quality MP3 via `ffmpeg`
 
-* **Resilient Fallbacks**
-  Automatically archives tracks without metadata when canonical matching fails.
+### ✅ Canonical Metadata Matching
 
-* **Headless Core Architecture**
-  Clean separation between pipeline logic and CLI rendering, making the backend UI-ready.
+* Matches official metadata via iTunes
+* Applies confidence scoring
+* Requests user confirmation only when needed
+
+### ✅ Smart Tagging
+
+* Embeds ID3 tags (title, artist, album, year)
+* Downloads and embeds album art when available
+
+### ✅ Resilient Fallbacks
+
+* Archives tracks when metadata cannot be confidently resolved
+* Treats existing files as successful outcomes (no duplicate failures)
+
+### ✅ Production-Grade Execution
+
+* Background worker with job locking
+* Retry with exponential backoff
+* Safe crash recovery
+* Explicit cancellation support
 
 ---
 
@@ -33,70 +88,95 @@ The system is designed to prioritize **correctness over blind automation** by re
 Ensure the following are installed and available in your `PATH`:
 
 * **Python 3.10+**
-* **ffmpeg** (audio extraction)
+* **ffmpeg** (audio conversion)
 * **yt-dlp** (media downloading)
 
 ---
 
 ## Installation
 
-This project uses **`uv`** for dependency management (recommended), but standard `pip` is also supported.
-
-### Option A: Using `uv` (Recommended)
+This project uses **`uv`** for dependency management (recommended).
 
 ```bash
 uv sync
 ```
 
-Run directly:
+---
+
+## Running the System
+
+### 1️⃣ Start the API
 
 ```bash
-uv run python ingest.py "Song Name"
+uv run uvicorn api.main:app --reload
+```
+
+### 2️⃣ Start the Worker
+
+In a separate terminal:
+
+```bash
+uv run python -m worker.main
+```
+
+The worker will continuously process runnable jobs.
+
+---
+
+## API Usage
+
+### Create a Job
+
+```bash
+curl -X POST http://localhost:8000/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "Numb Linkin Park",
+    "options": { "ask": false }
+  }'
+```
+
+Supports **idempotency** via header:
+
+```http
+Idempotency-Key: your-key-here
 ```
 
 ---
 
-### Option B: Using `pip`
+### Check Job Status
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+curl http://localhost:8000/jobs/<job_id>
+```
+
+Possible statuses:
+
+* `running`
+* `waiting` (USER_* input required)
+* `success`
+* `error`
+* `cancelled`
+
+---
+
+### Provide User Input (Intent / Metadata)
+
+```bash
+curl -X POST http://localhost:8000/jobs/<job_id>/input \
+  -H "Content-Type: application/json" \
+  -d '{ "choice": 0 }'
 ```
 
 ---
 
-## Usage
-
-The main entry point is `ingest.py`.
+### Cancel a Job
 
 ```bash
-# Basic usage
-python ingest.py "Everything - Alex Warren"
-
-# Force early intent selection
-python ingest.py "Everything" --ask
-
-# Verbose output (show yt-dlp / ffmpeg logs)
-python ingest.py "Blue" --verbose
-
-# Dry run (no download or file writes)
-python ingest.py "Halo" --dry-run
+curl -X POST http://localhost:8000/jobs/<job_id>/cancel
 ```
 
-### Flags
-
-* `--ask`
-  Force **early intent selection** before download.
-
-* `--verbose`
-  Show logs from underlying tools (`yt-dlp`, `ffmpeg`).
-
-* `--dry-run`
-  Execute the pipeline without downloading or writing files.
-
-* `--force-archive`
-  Skip metadata matching and archive immediately.
+Cancellation is terminal and idempotent.
 
 ---
 
@@ -108,39 +188,54 @@ By default, music is stored in:
 ~/Music/library
 ```
 
-You can override this location using an environment variable:
+Override via environment variable:
 
 ```bash
-export MUSIC_LIBRARY_ROOT="/path/to/your/music"
-python ingest.py "Song Name"
+export MUSIC_LIBRARY_ROOT="/path/to/music"
 ```
+
+---
+
+## Retry & Failure Semantics
+
+* Transient worker errors are retried with backoff
+* Deterministic pipeline errors fail immediately
+* Existing files are treated as **successful outcomes**
+* Cancelled jobs are never retried
 
 ---
 
 ## Legal Notice
 
-This project is intended for **personal use and educational purposes**.
+This project is intended for **personal and educational use only**.
 
 It does not host, distribute, or provide copyrighted content.
 Users are responsible for ensuring they have the right to download and store any media accessed using this tool.
 
 ---
 
-## Notes
-
-* Intent selection occurs **before download** when queries are ambiguous.
-* Metadata confirmation is requested **only when confidence is low**.
-* Search results depend on YouTube Music availability and ranking.
-* The project is non-commercial and provided as-is.
-
----
-
 ## Status
 
-**Version:** v1 (stabilization complete)
-Core architecture is stable; future versions may improve heuristics, UX polish, and automation.
+**Version:** **v2.0.0 (Locked)**
+
+v2 is considered **stable and production-ready**.
+
+### Guarantees
+
+* API contract is frozen
+* Pipeline semantics are stable
+* Job persistence schema is stable
+
+Future versions (v2.1+) may add:
+
+* Expanded test coverage
+* Authentication / access control
+* Observability improvements
+* Storage backends beyond SQLite
 
 ---
 
 Made with ❤️ by **Rouge Coders**
+*Truth over automation. Correctness over convenience.*
+
 

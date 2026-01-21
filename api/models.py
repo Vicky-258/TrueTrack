@@ -42,6 +42,7 @@ class JobStatusResponse(BaseModel):
         "waiting",
         "success",
         "error",
+        "cancelled"
     ]
 
     input_required: Optional[Dict[str, Any]] = Field(

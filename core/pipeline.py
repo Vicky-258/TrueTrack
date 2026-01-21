@@ -242,7 +242,12 @@ def handle_matching_metadata(job: Job):
         return
 
     hint = job.identity_hint
-    results = search_itunes(hint.title, ", ".join(hint.artists))
+    try:
+        results = search_itunes(hint.title, ", ".join(hint.artists))
+    except requests.RequestException:
+        job.emit("Metadata search failed (network error) — falling back to archive")
+        job.transition_to(PipelineState.ARCHIVING)
+        return
 
     if not results:
         job.transition_to(PipelineState.ARCHIVING)
@@ -333,8 +338,16 @@ def handle_storage(job: Job):
     final_path = os.path.join(LIBRARY_ROOT, f"{title} - {artist}.mp3")
 
     if os.path.exists(final_path):
+        job.result.success = True
+        job.result.title = title
+        job.result.artist = artist
+        job.result.album = job.final_metadata.get("collectionName")
+        job.result.source = "library"
         job.result.path = final_path
-        raise PipelineError("FILE_EXISTS", "Track already exists in library")
+        job.result.reason = "already_exists"
+    
+        job.transition_to(PipelineState.FINALIZED)
+        return
 
     shutil.move(job.extracted_file, final_path)
 
