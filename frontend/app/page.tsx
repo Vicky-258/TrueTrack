@@ -64,7 +64,7 @@ export default function Home() {
       <div className="text-center space-y-4">
         <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight bg-gradient-to-br from-white to-white/60 bg-clip-text text-transparent">
           Download Music <br className="hidden sm:block" />
-          <span className="text-blue-500">Effortlessly</span>
+          <span className="text-primary">Effortlessly</span>
         </h1>
         <p className="text-muted-foreground text-lg max-w-md mx-auto">
           Search for any song, album, or artist. TrueTrack handles the metadata, artwork, and organization globally.
@@ -74,8 +74,8 @@ export default function Home() {
       {/* Main Input */}
       <div className="w-full max-w-xl mx-auto space-y-4">
         <div className="relative group">
-          <div className="absolute inset-0 bg-blue-500/20 rounded-xl blur-xl group-hover:bg-blue-500/30 transition-all duration-500 opacity-0 group-hover:opacity-100" />
-          <div className="relative flex items-center bg-zinc-900/80 border border-zinc-800 rounded-xl p-2 focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all shadow-xl">
+          <div className="absolute inset-0 bg-primary/20 rounded-xl blur-xl group-hover:bg-primary/30 transition-all duration-500 opacity-0 group-hover:opacity-100" />
+          <div className="relative flex items-center bg-surface/80 border border-zinc-800 rounded-xl p-2 focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary/50 transition-all shadow-xl">
             <input
               className="flex-1 bg-transparent border-none text-lg px-4 py-3 placeholder:text-zinc-600 focus:outline-none focus:ring-0"
               placeholder="Search for a song..."
@@ -89,12 +89,12 @@ export default function Home() {
             <button
               onClick={submit}
               disabled={loading || !query.trim()}
-              className="p-3 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:hover:bg-blue-600 transition-colors"
+              className="group p-3 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:hover:bg-primary transition-all cursor-pointer shadow-lg shadow-primary/20 hover:shadow-primary/40 hover:scale-[1.02]"
             >
               {loading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <div className="w-5 h-5 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
               ) : (
-                <ArrowRight size={20} />
+                <ArrowRight size={20} className="transition-transform duration-300 group-hover:translate-x-1" />
               )}
             </button>
           </div>
@@ -160,16 +160,16 @@ export default function Home() {
                 <div className="flex items-center gap-3">
                   <div className={cn(
                     "w-2 h-2 rounded-full",
-                    job.status === 'success' ? "bg-green-500" :
-                      job.status === 'error' ? "bg-red-500" :
-                        job.status === 'running' ? "bg-blue-500 animate-pulse" :
+                    job.status === 'success' ? "bg-secondary" :
+                      job.status === 'error' ? "bg-destructive" :
+                        job.status === 'running' ? "bg-primary animate-pulse" :
                           "bg-zinc-500"
                   )} />
                   <div className="flex flex-col">
-                    <span className="font-medium text-sm text-zinc-200 group-hover:text-white transition-colors">
+                    <span className="font-medium text-sm text-foreground group-hover:text-primary transition-colors">
                       {job.title || job.query || "Unknown Track"}
                     </span>
-                    <span className="text-xs text-zinc-500">
+                    <span className="text-xs text-muted-foreground/70">
                       {formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}
                     </span>
                   </div>
@@ -191,20 +191,20 @@ function OptionToggle({ active, onChange, label, description, icon: Icon }: any)
       className={cn(
         "flex items-start gap-3 p-3 rounded-lg text-left transition-all border",
         active
-          ? "bg-blue-500/10 border-blue-500/20"
+          ? "bg-primary/10 border-primary/20 bg-gradient-to-b from-primary/5 to-transparent shadow-[0_0_15px_-3px_rgba(var(--primary),0.1)]"
           : "bg-transparent border-transparent hover:bg-zinc-800/50"
       )}
     >
       <div className={cn(
         "mt-0.5 p-1 rounded",
-        active ? "text-blue-400" : "text-zinc-500"
+        active ? "text-primary" : "text-zinc-500"
       )}>
         <Icon size={16} />
       </div>
       <div>
         <div className={cn(
           "text-sm font-medium",
-          active ? "text-blue-100" : "text-zinc-400"
+          active ? "text-primary" : "text-zinc-400"
         )}>{label}</div>
         <div className="text-xs text-zinc-500 leading-tight mt-0.5">{description}</div>
       </div>

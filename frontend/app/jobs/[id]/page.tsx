@@ -16,7 +16,8 @@ import {
   Clock,
   Terminal,
   Play,
-  PauseCircle
+  PauseCircle,
+  Archive
 } from "lucide-react";
 
 /* ==============================
@@ -114,13 +115,13 @@ export default function JobPage() {
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-      <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
+      <Loader2 className="w-10 h-10 text-primary animate-spin" />
       <p className="text-muted-foreground animate-pulse">Loading job context...</p>
     </div>
   );
 
   if (error) return (
-    <div className="p-6 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center gap-3">
+    <div className="p-6 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive flex items-center gap-3">
       <AlertCircle size={24} />
       <div>
         <h3 className="font-semibold">Error Loading Job</h3>
@@ -147,7 +148,7 @@ export default function JobPage() {
         <div className="space-y-1">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold tracking-tight">Job Details</h1>
-            <StatusBadge status={job.status} />
+            <StatusBadge job={job} />
           </div>
           <p className="text-sm font-mono text-zinc-500 flex items-center gap-2">
             <span className="select-all">{job.job_id}</span>
@@ -163,7 +164,7 @@ export default function JobPage() {
                 await api(`/jobs/${jobId}/resume`, { method: "POST" });
                 fetchJob();
               }}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-500 transition-colors text-sm font-medium"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary text-white hover:bg-secondary/80 transition-colors text-sm font-medium"
             >
               <Play size={16} /> Resume Job
             </button>
@@ -171,7 +172,7 @@ export default function JobPage() {
 
           {job.status === "running" && (
             <button
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors text-sm font-medium border border-red-500/20"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors text-sm font-medium border border-destructive/20"
               onClick={async () => {
                 await api(`/jobs/${jobId}/cancel`, { method: "POST" });
                 fetchJob();
@@ -185,8 +186,8 @@ export default function JobPage() {
 
       {/* Error Banner */}
       {job.status === "error" && job.error && (
-        <div className="p-4 rounded-xl bg-red-950/30 border border-red-500/30 text-red-200">
-          <h3 className="font-semibold flex items-center gap-2 mb-1 text-red-400">
+        <div className="p-4 rounded-xl bg-red-950/30 border border-destructive/30 text-destructive-foreground">
+          <h3 className="font-semibold flex items-center gap-2 mb-1 text-destructive">
             <XCircle size={18} />
             Pipeline Failed
           </h3>
@@ -200,7 +201,7 @@ export default function JobPage() {
       {hasMetadata && job.final_metadata && (
         <section className="relative overflow-hidden p-6 rounded-2xl bg-zinc-900 border border-zinc-800/50 flex flex-col sm:flex-row gap-6">
           {/* Background Glow */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -z-10" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -z-10" />
 
           {/* Album art */}
           <div className="shrink-0 relative group">
@@ -228,11 +229,11 @@ export default function JobPage() {
               <h2 className="text-2xl font-bold leading-tight">
                 {job.final_metadata.trackName}
               </h2>
-              <div className="flex items-center gap-2 text-lg text-zinc-300">
-                <User2 size={18} className="text-zinc-500" />
+              <div className="flex items-center gap-2 text-lg text-muted-foreground">
+                <User2 size={18} className="text-muted-foreground/70" />
                 {job.final_metadata.artistName}
               </div>
-              <div className="flex items-center gap-2 text-sm text-zinc-500">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground/60">
                 <Disc size={16} />
                 {job.final_metadata.collectionName}
               </div>
@@ -244,7 +245,7 @@ export default function JobPage() {
                 "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border",
                 alreadyExists
                   ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
-                  : "bg-green-500/10 text-green-500 border-green-500/20"
+                  : "bg-secondary/10 text-secondary border-secondary/20"
               )}>
                 {alreadyExists ? (
                   <>
@@ -299,7 +300,7 @@ export default function JobPage() {
                     fetchJob();
                   }}
                 >
-                  <div className="font-semibold group-hover:text-blue-400 transition-colors">{c.title}</div>
+                  <div className="font-semibold group-hover:text-primary transition-colors">{c.title}</div>
                   <div className="text-sm text-zinc-400 mt-1">
                     {c.artists.join(", ")}
                   </div>
@@ -327,7 +328,7 @@ export default function JobPage() {
               {job.input_required.choices.map((m, i) => (
                 <button
                   key={i}
-                  className="w-full flex items-center gap-4 p-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-blue-500/50 hover:bg-zinc-800/80 text-left transition-all group"
+                  className="w-full flex items-center gap-4 p-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-primary/50 hover:bg-zinc-800/80 text-left transition-all group"
                   onClick={async () => {
                     await api(`/jobs/${jobId}/input`, {
                       method: "POST",
@@ -351,7 +352,7 @@ export default function JobPage() {
                   )}
 
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold truncate group-hover:text-blue-400 transition-colors">
+                    <div className="font-semibold truncate group-hover:text-primary transition-colors">
                       {m.trackName}
                     </div>
                     <div className="text-sm text-zinc-400 truncate">
@@ -388,29 +389,35 @@ export default function JobPage() {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const styles = {
-    running: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-    waiting: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
-    success: "bg-green-500/10 text-green-500 border-green-500/20",
-    error: "bg-red-500/10 text-red-500 border-red-500/20",
-    cancelled: "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
-  }[status] || "bg-zinc-500/10 text-zinc-500 border-zinc-500/20";
+function StatusBadge({ job }: { job: Job }) {
+  const isArchived = job.status === 'success' && (job.result?.archived || job.result?.reason === 'already_exists');
 
-  const labels = {
+  const status = isArchived ? 'archived' : job.status;
+
+  const styles: Record<string, string> = {
+    running: "bg-primary/10 text-primary border-primary/20",
+    waiting: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+    success: "bg-secondary/10 text-secondary border-secondary/20",
+    archived: "bg-orange-500/10 text-orange-500 border-orange-500/20",
+    error: "bg-destructive/10 text-destructive border-destructive/20",
+    cancelled: "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
+  };
+
+  const labels: Record<string, string> = {
     running: "Processing",
     waiting: "Input Required",
     success: "Completed",
+    archived: "Archived",
     error: "Failed",
     cancelled: "Cancelled"
-  }[status] || status;
+  };
 
   return (
     <span className={cn(
       "px-2.5 py-0.5 rounded-full text-xs font-medium border uppercase tracking-wider",
-      styles
+      styles[status] || styles.cancelled
     )}>
-      {labels}
+      {labels[status] || status}
     </span>
   )
 }
