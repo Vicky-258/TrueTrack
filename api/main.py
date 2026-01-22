@@ -17,6 +17,7 @@ from infra.sqlite_job_store import SQLiteJobStore
 from infra.job_store import JobStore
 from worker.runtime import WorkerRuntime
 from dataclasses import asdict
+from fastapi.responses import JSONResponse
 
 def build_status(job: Job) -> JobStatusResponse:
     status = "running"
@@ -65,7 +66,7 @@ def build_status(job: Job) -> JobStatusResponse:
 
     return response
 
-def create_app() -> FastAPI:
+def create_app(*, host: str, port: int) -> FastAPI:
     # ----------------------------------
     # Config
     # ----------------------------------
@@ -265,6 +266,12 @@ def create_app() -> FastAPI:
 
         store.update(job)
         return build_status(job)
+        
+    @app.get("/__config", include_in_schema=False)
+    def runtime_config():
+        return JSONResponse({
+            "api_base_url": f"http://{host}:{port}"
+        })
 
     return app
 

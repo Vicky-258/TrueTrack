@@ -24,7 +24,7 @@ def main() -> None:
         format="[TRUETRACK] %(asctime)s | %(levelname)s | %(message)s",
     )
 
-    app = create_app()
+    app = create_app(host=host, port=port)
 
     uvicorn.run(
         app,
