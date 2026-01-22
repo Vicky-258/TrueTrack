@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from typing import Optional, List, Dict, Any
 
 from core.states import PipelineState
+
+def ensure_utc(dt: datetime) -> datetime:
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 @dataclass
 class StateRecord:
@@ -26,8 +31,8 @@ class StateRecord:
     def from_dict(cls, data: Dict[str, Any]) -> "StateRecord":
         return cls(
             state=PipelineState[data["state"]],
-            entered_at=datetime.fromisoformat(data["entered_at"]),
-            exited_at=datetime.fromisoformat(data["exited_at"])
+            entered_at=ensure_utc(datetime.fromisoformat(data["entered_at"])),
+            exited_at=ensure_utc(datetime.fromisoformat(data["exited_at"]))
             if data.get("exited_at") else None,
             status=data.get("status"),
         )
@@ -80,8 +85,8 @@ class Job:
     current_state: PipelineState = PipelineState.INIT
     state_history: List[StateRecord] = field(default_factory=list)
 
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     failed_state: Optional[PipelineState] = None
     error_code: Optional[str] = None
@@ -116,7 +121,7 @@ class Job:
         self.last_message = message
 
     def transition_to(self, new_state: PipelineState) -> None:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         if self.state_history:
             self.state_history[-1].exited_at = now
@@ -131,7 +136,7 @@ class Job:
         self.updated_at = now
 
     def fail(self, code: str, message: str) -> None:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         self.failed_state = self.current_state
         self.error_code = code
@@ -176,7 +181,7 @@ class Job:
 
     def schedule_retry(self, delay_seconds: int) -> None:
         self.retry_count += 1
-        self.next_run_at = datetime.utcnow() + timedelta(seconds=delay_seconds)
+        self.next_run_at = datetime.now(timezone.utc) + timedelta(seconds=delay_seconds)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -233,8 +238,8 @@ class Job:
             for s in data.get("state_history", [])
         ]
 
-        job.created_at = datetime.fromisoformat(data["created_at"])
-        job.updated_at = datetime.fromisoformat(data["updated_at"])
+        job.created_at = ensure_utc(datetime.fromisoformat(data["created_at"]))
+        job.updated_at = ensure_utc(datetime.fromisoformat(data["updated_at"]))
 
         if data.get("failed_state"):
             job.failed_state = PipelineState[data["failed_state"]]
@@ -247,12 +252,12 @@ class Job:
             job.identity_hint = IdentityHint(**data["identity_hint"])
 
         if data.get("locked_at"):
-            job.locked_at = datetime.fromisoformat(data["locked_at"])
+            job.locked_at = ensure_utc(datetime.fromisoformat(data["locked_at"]))
 
         job.locked_by = data.get("locked_by")
 
         if data.get("next_run_at"):
-            job.next_run_at = datetime.fromisoformat(data["next_run_at"])
+            job.next_run_at = ensure_utc(datetime.fromisoformat(data["next_run_at"]))
             
         if data.get("resume_from"):
             job.resume_from = PipelineState[data["resume_from"]]

@@ -1,7 +1,7 @@
 import sqlite3
 import json
 from typing import Optional, Iterable, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from infra.job_store import JobStore
 from core.job import Job
@@ -20,7 +20,7 @@ def is_runnable(job: Job) -> bool:
     if job.current_state.name.startswith("USER_"):
         return False
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     if job.next_run_at and job.next_run_at > now:
         return False
@@ -68,7 +68,7 @@ class SQLiteJobStore(JobStore):
 
     def create(self, job: Job) -> None:
         payload = json.dumps(job.to_dict())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         with sqlite3.connect(self.db_path) as conn:
             try:
@@ -97,7 +97,7 @@ class SQLiteJobStore(JobStore):
 
     def update(self, job: Job) -> None:
         payload = json.dumps(job.to_dict())
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         with sqlite3.connect(self.db_path) as conn:
             cur = conn.execute(
@@ -159,7 +159,7 @@ class SQLiteJobStore(JobStore):
         return self.get(row[0])
 
     def bind_idempotency_key(self, key: str, job_id: str) -> None:
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(

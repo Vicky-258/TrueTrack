@@ -13,11 +13,9 @@ import {
   Music2,
   User2,
   Disc,
-  Clock,
   Terminal,
   Play,
   PauseCircle,
-  Archive
 } from "lucide-react";
 
 /* ==============================

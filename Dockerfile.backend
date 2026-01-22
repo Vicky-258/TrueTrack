@@ -1,0 +1,49 @@
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+# -------------------------------------------------
+# Install curl only (already present on most images,
+# but explicitly included for safety)
+# -------------------------------------------------
+RUN apt-get update && apt-get install -y curl \
+ || true
+
+# -------------------------------------------------
+# Install static ffmpeg (no apt repos)
+# -------------------------------------------------
+RUN curl -L https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz \
+ | tar -xJ \
+ && mv ffmpeg-*/ffmpeg /usr/local/bin/ffmpeg \
+ && mv ffmpeg-*/ffprobe /usr/local/bin/ffprobe \
+ && chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe
+
+# -------------------------------------------------
+# Install uv
+# -------------------------------------------------
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:${PATH}"
+
+# -------------------------------------------------
+# Install Python via uv
+# -------------------------------------------------
+RUN uv python install 3.12
+ENV UV_PYTHON=3.12
+
+# -------------------------------------------------
+# Install Python dependencies
+# -------------------------------------------------
+COPY pyproject.toml uv.lock ./
+RUN uv pip install --no-cache-dir .
+
+# -------------------------------------------------
+# Copy application
+# -------------------------------------------------
+COPY . .
+
+ENV TRUETRACK_HOST=0.0.0.0
+ENV TRUETRACK_PORT=8000
+
+EXPOSE 8000
+
+CMD ["uv", "run", "python", "app.py"]

@@ -1,241 +1,302 @@
-# TrueTrack
+# 🎵 TrueTrack
 
-**TrueTrack** is a production-grade backend system for **resolving music intent, downloading audio, applying canonical metadata, and organizing a local music library**.
+**TrueTrack** is a self-hosted, local-first music ingestion pipeline that turns vague track queries into **properly tagged, organized audio files** — with human-in-the-loop correction when needed.
 
-It is built around a **state-machine–driven pipeline** and a **background worker architecture**, prioritizing **correctness, observability, and resilience** over blind automation.
+It runs as a **local service** (API + background worker + web UI), designed to be:
 
-The system resolves ambiguous intent *before* committing to downloads and only requests user input when confidence is insufficient.
+* portable
+* debuggable
+* respectful of user control
+* resilient on restricted networks
 
----
-
-## Core Concepts
-
-TrueTrack is designed around three principles:
-
-1. **Intent before action**
-   Ambiguous queries are resolved *before* download to prevent silent misidentification.
-
-2. **Deterministic pipelines**
-   Each job advances one explicit state at a time, making progress observable, debuggable, and restart-safe.
-
-3. **Resilient execution**
-   Failures are isolated, retried with backoff when appropriate, and never block the API.
+> Think: *“a local music brain, not a cloud black box.”*
 
 ---
 
-## Architecture Overview (v2)
+## ✨ Features
 
-TrueTrack is split into three independent layers:
+* 🔍 **Fuzzy track resolution**
+
+  * Handles ambiguous queries
+  * Pauses for user input when confidence is low
+* 🧠 **Human-in-the-loop pipeline**
+
+  * Intent selection
+  * Metadata selection
+  * Resume / cancel at any stage
+* ⚙️ **Stateful job system**
+
+  * Persistent job history
+  * Resume after crashes or restarts
+* 🎧 **Proper tagging & storage**
+
+  * Normalized metadata
+  * Deduplicated storage
+* 🖥️ **Web UI**
+
+  * Track job progress in real time
+  * Interactive conflict resolution
+* 🧩 **Local-first & self-hosted**
+
+  * No cloud dependency
+  * Runs entirely on your machine
+
+---
+
+## 🧠 Architecture Overview
+
+TrueTrack is composed of **three cooperating parts**:
 
 ```
-api/        → HTTP interface (job creation, status, user input, cancellation)
-worker/     → Background worker executing pipeline steps
-core/       → Pure pipeline logic and state machine
+┌────────────┐
+│  Frontend  │  (Next.js SPA)
+└─────▲──────┘
+      │ HTTP
+┌─────┴──────┐
+│    API     │  (FastAPI)
+│ job control│
+└─────▲──────┘
+      │ shared store
+┌─────┴──────┐
+│   Worker   │  (background executor)
+│ pipeline   │
+└────────────┘
 ```
 
-### Key Properties
+### Key design choices
 
-* **API-first** (non-blocking, asynchronous)
-* **Background workers** (step-based execution)
-* **Persistent jobs** (SQLite)
-* **Locking + retries** (safe under crashes)
-* **Pause/resume via USER_* states**
-* **Idempotent job creation**
-* **Cancellation support**
+* **API never executes jobs**
+* **Worker executes exactly one pipeline step per tick**
+* **All state is persisted**
+* **Cancellation and resume are first-class**
 
----
+This makes the system:
 
-## Features
-
-### ✅ Intent Resolution
-
-* Uses YouTube Music search to resolve candidate tracks
-* Pauses for user input when confidence is low
-* Prevents incorrect downloads caused by ambiguous queries
-
-### ✅ High-Quality Audio Ingestion
-
-* Downloads best available audio using `yt-dlp`
-* Converts to high-quality MP3 via `ffmpeg`
-
-### ✅ Canonical Metadata Matching
-
-* Matches official metadata via iTunes
-* Applies confidence scoring
-* Requests user confirmation only when needed
-
-### ✅ Smart Tagging
-
-* Embeds ID3 tags (title, artist, album, year)
-* Downloads and embeds album art when available
-
-### ✅ Resilient Fallbacks
-
-* Archives tracks when metadata cannot be confidently resolved
-* Treats existing files as successful outcomes (no duplicate failures)
-
-### ✅ Production-Grade Execution
-
-* Background worker with job locking
-* Retry with exponential backoff
-* Safe crash recovery
-* Explicit cancellation support
+* crash-safe
+* inspectable
+* predictable
 
 ---
 
-## Prerequisites
+## 📦 Project Structure
 
-Ensure the following are installed and available in your `PATH`:
-
-* **Python 3.10+**
-* **ffmpeg** (audio conversion)
-* **yt-dlp** (media downloading)
+```
+truetrack/
+├── app.py                # canonical entrypoint
+├── api/                  # FastAPI routes & schemas
+├── core/                 # pipeline logic & states
+├── worker/               # background worker runtime
+├── infra/                # persistence layer
+├── frontend/             # web UI (Next.js)
+├── utils/                # shared helpers
+├── install.sh            # Unix installer
+├── install.ps1           # Windows installer
+├── run.sh                # Unix runner
+├── run.ps1               # Windows runner
+├── pyproject.toml        # Python deps
+└── uv.lock               # locked environment
+```
 
 ---
 
-## Installation
+## ✅ System Requirements
 
-This project uses **`uv`** for dependency management (recommended).
+TrueTrack intentionally keeps requirements minimal and explicit.
+
+### Required
+
+* **Python ≥ 3.11**
+* **ffmpeg** available in `PATH`
+* Internet access for:
+
+  * YouTube / metadata APIs
+  * initial install
+
+### Supported Platforms
+
+* Linux
+* macOS
+* Windows (PowerShell)
+
+> No admin / sudo access required.
+
+---
+
+## 🚀 Installation
+
+### Linux / macOS
 
 ```bash
-uv sync
+curl -fsSL https://truetrack.sh/install.sh | sh
 ```
+
+### Windows (PowerShell)
+
+```powershell
+iwr https://truetrack.sh/install.ps1 -useb | iex
+```
+
+The installer will:
+
+1. Check system requirements
+2. Install `uv` if missing
+3. Download TrueTrack into `~/.truetrack`
+4. Install dependencies
 
 ---
 
-## Running the System
+## ▶️ Running TrueTrack
 
-### 1️⃣ Start the API
+### Linux / macOS
 
 ```bash
-uv run uvicorn api.main:app --reload
+~/.truetrack/run.sh
 ```
 
-### 2️⃣ Start the Worker
+### Windows
 
-In a separate terminal:
+```powershell
+$HOME\.truetrack\run.ps1
+```
+
+By default, the service starts on:
+
+```
+http://127.0.0.1:8000
+```
+
+Open this in your browser to access the UI.
+
+---
+
+## ⚙️ Configuration
+
+TrueTrack is configured entirely via **environment variables**.
+
+| Variable              | Default                 | Description       |
+| --------------------- | ----------------------- | ----------------- |
+| `TRUETRACK_HOST`      | `127.0.0.1`             | Bind address      |
+| `TRUETRACK_PORT`      | `8000`                  | API/UI port       |
+| `TRUETRACK_LOG_LEVEL` | `info`                  | Logging verbosity |
+| `ALLOWED_ORIGINS`     | `http://localhost:3000` | CORS              |
+
+You can override these before running:
 
 ```bash
-uv run python -m worker.main
+export TRUETRACK_PORT=9000
+./run.sh
 ```
-
-The worker will continuously process runnable jobs.
 
 ---
 
-## API Usage
+## 🧪 Job Lifecycle
 
-### Create a Job
+Each track request becomes a **job** that moves through explicit states:
+
+```
+RESOLVING_IDENTITY
+→ USER_INTENT_SELECTION (optional)
+→ SEARCHING
+→ DOWNLOADING
+→ EXTRACTING
+→ MATCHING_METADATA
+→ USER_METADATA_SELECTION (optional)
+→ TAGGING
+→ STORING
+→ FINALIZED
+```
+
+### Control operations
+
+* Cancel at any time
+* Resume from safe checkpoints
+* Inspect full state history
+
+---
+
+## 🔁 Resume & Fault Tolerance
+
+TrueTrack is designed to survive:
+
+* crashes
+* restarts
+* power loss
+* user cancellation
+
+All jobs are persisted in a local database and can be resumed safely.
+
+---
+
+## 🔐 Security Model
+
+TrueTrack assumes a **trusted local environment**.
+
+* No authentication by default
+* Intended for localhost / LAN use
+* For exposure beyond localhost:
+
+  * use a reverse proxy
+  * add authentication externally
+
+---
+
+## 🐳 Docker Support (Optional)
+
+Docker support is **best-effort** and may not work on restricted networks.
+
+TrueTrack does **not require Docker** and is intentionally designed to run without it.
+
+---
+
+## 🧹 Uninstall
+
+TrueTrack is fully self-contained.
 
 ```bash
-curl -X POST http://localhost:8000/jobs \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "Numb Linkin Park",
-    "options": { "ask": false }
-  }'
+rm -rf ~/.truetrack
 ```
 
-Supports **idempotency** via header:
-
-```http
-Idempotency-Key: your-key-here
-```
+No system files are touched.
 
 ---
 
-### Check Job Status
+## 🗺️ Roadmap (Non-binding)
 
-```bash
-curl http://localhost:8000/jobs/<job_id>
-```
-
-Possible statuses:
-
-* `running`
-* `waiting` (USER_* input required)
-* `success`
-* `error`
-* `cancelled`
+* `truetrack` CLI command
+* Config file (`truetrack.toml`)
+* Plugin system
+* Optional auth
+* CI-built Docker images
 
 ---
 
-### Provide User Input (Intent / Metadata)
+## 📜 Philosophy
 
-```bash
-curl -X POST http://localhost:8000/jobs/<job_id>/input \
-  -H "Content-Type: application/json" \
-  -d '{ "choice": 0 }'
-```
+TrueTrack prioritizes:
 
----
-
-### Cancel a Job
-
-```bash
-curl -X POST http://localhost:8000/jobs/<job_id>/cancel
-```
-
-Cancellation is terminal and idempotent.
+* **clarity over cleverness**
+* **explicit state over hidden magic**
+* **user control over automation**
+* **portability over infrastructure hype**
 
 ---
 
-## Configuration
+## ❤️ A Note on Scope
 
-By default, music is stored in:
+TrueTrack is a **personal, self-hosted tool**.
 
-```
-~/Music/library
-```
+It is not:
 
-Override via environment variable:
+* a commercial service
+* a DRM bypass tool
+* a cloud scraper
 
-```bash
-export MUSIC_LIBRARY_ROOT="/path/to/music"
-```
+Use responsibly.
 
 ---
 
-## Retry & Failure Semantics
+## 🏁 Status
 
-* Transient worker errors are retried with backoff
-* Deterministic pipeline errors fail immediately
-* Existing files are treated as **successful outcomes**
-* Cancelled jobs are never retried
+> **TrueTrack is feature-complete and stable for local use.**
 
----
-
-## Legal Notice
-
-This project is intended for **personal and educational use only**.
-
-It does not host, distribute, or provide copyrighted content.
-Users are responsible for ensuring they have the right to download and store any media accessed using this tool.
-
----
-
-## Status
-
-**Version:** **v2.0.0 (Locked)**
-
-v2 is considered **stable and production-ready**.
-
-### Guarantees
-
-* API contract is frozen
-* Pipeline semantics are stable
-* Job persistence schema is stable
-
-Future versions (v2.1+) may add:
-
-* Expanded test coverage
-* Authentication / access control
-* Observability improvements
-* Storage backends beyond SQLite
-
----
-
-Made with ❤️ by **Rouge Coders**
-*Truth over automation. Correctness over convenience.*
-
-
+Docker and packaging improvements may come later, but the core system is finished.

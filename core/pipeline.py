@@ -1,5 +1,6 @@
 from typing import Callable, Dict
-import os
+from pathlib import Path
+
 import shutil
 import subprocess
 import requests
@@ -180,9 +181,9 @@ def handle_downloading(job: Job):
     job.emit(f"Downloading: {job.selected_source['title']}")
 
     temp_dir = ensure_job_temp_dir(job.job_id)
-    job.temp_dir = temp_dir
+    job.temp_dir = str(temp_dir)
 
-    output_template = os.path.join(temp_dir, "%(title)s.%(ext)s")
+    output_template = str(temp_dir / "%(title)s.%(ext)s")
 
     cmd = [
         "yt-dlp",
@@ -201,11 +202,11 @@ def handle_downloading(job: Job):
         stderr=None if job.options.verbose else subprocess.DEVNULL,
     )
 
-    files = os.listdir(temp_dir)
+    files = [p for p in temp_dir.iterdir() if p.is_file()]
     if not files:
         raise PipelineError("NO_FILE", "yt-dlp produced no output")
 
-    job.downloaded_file = os.path.join(temp_dir, files[0])
+    job.downloaded_file = str(files[0])
     job.transition_to(PipelineState.EXTRACTING)
 
 
@@ -216,17 +217,17 @@ def handle_downloading(job: Job):
 def handle_extracting(job: Job):
     job.emit("Converting audio to MP3 (320kbps)")
 
-    base, _ = os.path.splitext(job.downloaded_file)
-    output_path = base + ".mp3"
+    input_path = Path(job.downloaded_file)
+    output_path = input_path.with_suffix(".mp3")
 
     subprocess.run(
-        ["ffmpeg", "-y", "-i", job.downloaded_file, "-ab", "320k", output_path],
+        ["ffmpeg", "-y", "-i", job.downloaded_file, "-ab", "320k", str(output_path)],
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
 
-    job.extracted_file = output_path
+    job.extracted_file = str(output_path)
     job.transition_to(PipelineState.MATCHING_METADATA)
 
 
@@ -335,15 +336,15 @@ def handle_storage(job: Job):
 
     title = safe_filename(job.final_metadata["trackName"])
     artist = safe_filename(job.final_metadata["artistName"])
-    final_path = os.path.join(LIBRARY_ROOT, f"{title} - {artist}.mp3")
+    final_path = LIBRARY_ROOT / f"{title} - {artist}.mp3"
 
-    if os.path.exists(final_path):
+    if final_path.exists():
         job.result.success = True
         job.result.title = title
         job.result.artist = artist
         job.result.album = job.final_metadata.get("collectionName")
         job.result.source = "library"
-        job.result.path = final_path
+        job.result.path = str(final_path)
         job.result.reason = "already_exists"
     
         job.transition_to(PipelineState.FINALIZED)
@@ -356,7 +357,7 @@ def handle_storage(job: Job):
     job.result.artist = artist
     job.result.album = job.final_metadata.get("collectionName")
     job.result.source = "iTunes (verified)"
-    job.result.path = final_path
+    job.result.path = str(final_path)
 
     job.transition_to(PipelineState.FINALIZED)
 
@@ -368,20 +369,20 @@ def handle_storage(job: Job):
 def handle_archiving(job: Job):
     job.emit("No reliable metadata found — archiving track")
 
-    archive_dir = os.path.join(LIBRARY_ROOT, "_Unidentified")
+    archive_dir = LIBRARY_ROOT / "_Unidentified"
     ensure_dir(archive_dir)
 
     hint = job.identity_hint
     title = safe_filename(hint.title)
     artist = safe_filename(hint.artists[0] if hint.artists else "Unknown")
 
-    final_path = os.path.join(archive_dir, f"{title} - {artist}.mp3")
+    final_path = archive_dir / f"{title} - {artist}.mp3"
     shutil.move(job.extracted_file, final_path)
 
     job.result.archived = True
     job.result.title = hint.title
     job.result.artist = ", ".join(hint.artists)
     job.result.reason = "Unverified metadata"
-    job.result.path = final_path
+    job.result.path = str(final_path)
 
     job.transition_to(PipelineState.FINALIZED)
