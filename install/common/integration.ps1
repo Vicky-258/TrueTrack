@@ -18,69 +18,78 @@ function Setup-Integration {
 
     # 1. Global Launcher
     # ---------------------------------------------------------
-    Write-Host "`nCreate global global command 'truetrack'? (y/N)" -NoNewline
-    $response = Read-Host
-    if ($response -eq "y") {
-        $BinDir = "$InstallDir\bin"
+    $BinDir = "$InstallDir\bin"
+    if (-not (Test-Path $BinDir)) {
         New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
-        
-        $LauncherPs1 = "$BinDir\truetrack.ps1"
-        $LauncherCmd = "$BinDir\truetrack.cmd"
+    }
+    
+    $LauncherPs1 = "$BinDir\truetrack.ps1"
+    $LauncherCmd = "$BinDir\truetrack.cmd"
 
-        # PS1 Launcher
-        $content = @"
+    # PS1 Launcher
+    $content = @"
 Set-Location "$InstallDir"
 & ".\run.ps1" `$args
 "@
-        Set-Content -Path $LauncherPs1 -Value $content
+    Set-Content -Path $LauncherPs1 -Value $content
 
-        # CMD Shim
-        $cmdContent = @"
+    # CMD Shim
+    $cmdContent = @"
 @echo off
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0truetrack.ps1" %*
 "@
-        Set-Content -Path $LauncherCmd -Value $cmdContent
-        
-        Write-LogSuccess "Created launcher at $LauncherPs1"
+    Set-Content -Path $LauncherCmd -Value $cmdContent
+    
+    Write-LogSuccess "Created launcher at $LauncherPs1"
 
-        # PATH Check (User Scope)
-        $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
-        if ($UserPath -notlike "*$BinDir*") {
-            Write-Host "`nAdd $BinDir to User PATH? (y/N)" -NoNewline
-            $pathResp = Read-Host
-            if ($pathResp -eq "y") {
-                [Environment]::SetEnvironmentVariable("Path", $UserPath + ";$BinDir", "User")
-                $env:Path += ";$BinDir"
-                Write-LogSuccess "Added to User PATH."
-            }
-        }
+    # PATH Check (User Scope)
+    $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($UserPath -notlike "*$BinDir*") {
+        Write-LogWarn "$BinDir is not in your User PATH. Add it manually or restart session to use 'truetrack' from CLI."
+        # We can try to add it non-interactively, but modifying PATH without explicit consent is often frowned upon.
+        # However, the prompt says "Must NOT modify system PATH". User PATH is somewhat safer but typically requires consent.
+        # "If directory is not on PATH... require explicit consent".
+        # But global rules "Installers must never wait for user input".
+        # So we SKIP adding to PATH and just Warn.
     }
 
-    # 2. Desktop Shortcut
+    # 2. Shortcuts (Desktop & Start Menu)
     # ---------------------------------------------------------
     $IconPath = "$InstallDir\assets\icon\truetrack.ico"
     if (-not (Test-Path $IconPath)) {
-        Write-LogWarn "Icon assets not found. Desktop launcher not created."
+        Write-LogWarn "Icon assets not found. Shortcuts not created."
         return
     }
 
-    Write-Host "`nCreate desktop launcher? (y/N)" -NoNewline
-    $respShortcut = Read-Host
-    if ($respShortcut -eq "y") {
-        $DesktopPath = [Environment]::GetFolderPath("Desktop")
-        $ShortcutPath = "$DesktopPath\TrueTrack.lnk"
-        
-        $WshShell = New-Object -ComObject WScript.Shell
-        $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
-        
-        # Target PowerShell to run the script
-        $Shortcut.TargetPath = "powershell.exe"
-        $Shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$RunScript`""
-        $Shortcut.WorkingDirectory = $InstallDir
-        $Shortcut.IconLocation = "$IconPath"
-        $Shortcut.Description = "Start TrueTrack"
-        
-        $Shortcut.Save()
-        Write-LogSuccess "Created shortcut on Desktop."
+    $WshShell = New-Object -ComObject WScript.Shell
+    
+    # Function to create shortcut
+    function Create-Shortcut {
+        param($LinkPath, $Desc)
+        try {
+            $Shortcut = $WshShell.CreateShortcut($LinkPath)
+            $Shortcut.TargetPath = "powershell.exe"
+            $Shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Minimized -File `"$RunScript`""
+            $Shortcut.WorkingDirectory = $InstallDir
+            $Shortcut.IconLocation = "$IconPath"
+            $Shortcut.Description = $Desc
+            $Shortcut.Save()
+            Write-LogSuccess "Created shortcut: $LinkPath"
+        } catch {
+            Write-LogWarn "Failed to create shortcut at $LinkPath"
+        }
+    }
+
+    # Desktop
+    $DesktopPath = [Environment]::GetFolderPath("Desktop")
+    Create-Shortcut -LinkPath "$DesktopPath\TrueTrack.lnk" -Desc "Start TrueTrack"
+
+    # Start Menu
+    $StartMenuPath = [Environment]::GetFolderPath("StartMenu") # Programs folder usually better
+    $StartMenuPrograms = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs"
+    if (Test-Path $StartMenuPrograms) {
+        Create-Shortcut -LinkPath "$StartMenuPrograms\TrueTrack.lnk" -Desc "Start TrueTrack"
+    } else {
+         Write-LogWarn "Could not locate Start Menu Programs folder."
     }
 }
