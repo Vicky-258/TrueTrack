@@ -1,43 +1,71 @@
-# -----------------------------
-# Python bytecode / caches
-# -----------------------------
+# =====================================================
+# Python: bytecode & caches
+# =====================================================
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 
-# -----------------------------
-# Virtual environments
-# -----------------------------
-.venv/
-venv/
-env/
+# =====================================================
+# Python virtual environments (backend only)
+# =====================================================
+backend/venv/
+backend/.venv/
+backend/env/
 
-# -----------------------------
-# uv / build artifacts
-# -----------------------------
+# =====================================================
+# Python build / packaging artifacts
+# =====================================================
 .build/
 .dist/
 *.egg-info/
 
-# -----------------------------
-# OS / editor noise
-# -----------------------------
+# =====================================================
+# Node / frontend artifacts
+# =====================================================
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.turbo/
+
+# =====================================================
+# OS & editor noise
+# =====================================================
 .DS_Store
 Thumbs.db
+
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# -----------------------------
-# Logs
-# -----------------------------
+# =====================================================
+# Logs & runtime output
+# =====================================================
 *.log
 
-# -----------------------------
-# Music / media files (CRITICAL)
-# -----------------------------
+# =====================================================
+# Environment variables / secrets
+# =====================================================
+.env
+.env.*
+
+# =====================================================
+# Test & coverage artifacts
+# =====================================================
+.coverage
+htmlcov/
+
+# =====================================================
+# Temp / scratch files
+# =====================================================
+scratch.py
+tmp/
+temp/
+
+# =====================================================
+# Media files (CRITICAL: NEVER COMMIT)
+# =====================================================
 *.mp3
 *.m4a
 *.opus
@@ -45,27 +73,75 @@ Thumbs.db
 *.flac
 *.aac
 
-# Default library folder (never commit music)
+# Default media / library folders
 Music/
 music/
 _library/
 _Unidentified/
 
-# -----------------------------
-# Temp / scratch
-# -----------------------------
-scratch.py
-tmp/
-temp/
+# =====================================================
+# Database files (local only)
+# =====================================================
+*.db
+*.sqlite
+*.sqlite3
 
-# -----------------------------
-# Test artifacts
-# -----------------------------
-.coverage
-htmlcov/
+# =====================================================
+# Frontend build & cache artifacts
+# =====================================================
 
-# -----------------------------
-# Environment variables
-# -----------------------------
-.env
-.env.*
+# General JS / TS
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Next.js (already partially covered, but make global-safe)
+.next/
+out/
+
+# Vite / Parcel / Webpack
+dist/
+build/
+.cache/
+.parcel-cache/
+
+# Turborepo
+.turbo/
+
+# Astro
+.astro/
+
+# Svelte / SvelteKit
+.svelte-kit/
+
+# Remix
+.remix/
+
+# =====================================================
+# Frontend environment files
+# =====================================================
+.env.local
+.env.development
+.env.production
+.env.test
+
+# =====================================================
+# Frontend testing artifacts
+# =====================================================
+coverage/
+playwright-report/
+test-results/
+
+# =====================================================
+# Frontend editor & tooling noise
+# =====================================================
+.eslintcache
+.stylelintcache
+.vite/
+
+# =====================================================
+# Frontend misc
+# =====================================================
+*.tsbuildinfo
