@@ -4,10 +4,24 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import {
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
+  Loader2,
+  Music2,
+  User2,
+  Disc,
+  Clock,
+  Terminal,
+  Play,
+  PauseCircle
+} from "lucide-react";
 
 /* ==============================
    Types
-================================ */
+================ ================ */
 
 type IntentChoice = {
   title: string;
@@ -53,11 +67,12 @@ type Job = {
   final_metadata?: FinalMetadata | null;
   result?: JobResult | null;
   error?: { code: string; message: string } | null;
+  can_resume?: boolean;
 };
 
 /* ==============================
    Page
-================================ */
+================ ================ */
 
 export default function JobPage() {
   const { id } = useParams<{ id: string }>();
@@ -66,6 +81,7 @@ export default function JobPage() {
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showLogs, setShowLogs] = useState(false);
 
   const isTerminal =
     job?.status === "success" ||
@@ -88,16 +104,31 @@ export default function JobPage() {
     if (!jobId) return;
     fetchJob();
     if (isTerminal) return;
-    const t = setInterval(fetchJob, 1500);
+    const t = setInterval(fetchJob, 1000);
     return () => clearInterval(t);
   }, [jobId, fetchJob, isTerminal]);
 
   /* ==============================
      Guards
-================================ */
+  ================ ================ */
 
-  if (loading) return <div className="p-6">Loading job…</div>;
-  if (error) return <div className="p-6 text-red-500">{error}</div>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+      <Loader2 className="w-10 h-10 text-blue-500 animate-spin" />
+      <p className="text-muted-foreground animate-pulse">Loading job context...</p>
+    </div>
+  );
+
+  if (error) return (
+    <div className="p-6 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 flex items-center gap-3">
+      <AlertCircle size={24} />
+      <div>
+        <h3 className="font-semibold">Error Loading Job</h3>
+        <p className="text-sm opacity-90">{error}</p>
+      </div>
+    </div>
+  );
+
   if (!job) return <div className="p-6">Job not found</div>;
 
   const isWaiting = job.status === "waiting";
@@ -107,87 +138,135 @@ export default function JobPage() {
 
   /* ==============================
      Render
-================================ */
+  ================ ================ */
 
   return (
-    <main className="p-6 space-y-6">
+    <main className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
-      <header className="space-y-1">
-        <h1 className="text-xl font-semibold flex items-center gap-2">
-          Job
-          <span className="font-mono text-sm text-zinc-400">
-            {job.job_id}
-          </span>
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-6">
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold tracking-tight">Job Details</h1>
+            <StatusBadge status={job.status} />
+          </div>
+          <p className="text-sm font-mono text-zinc-500 flex items-center gap-2">
+            <span className="select-all">{job.job_id}</span>
+            •
+            <span className="text-zinc-400">{job.state}</span>
+          </p>
+        </div>
 
-          {job.status === "success" && (
-            <span className="px-2 py-1 text-xs rounded bg-green-800 text-green-200">
-              ✓ Completed
-            </span>
+        <div className="flex items-center gap-3">
+          {job.can_resume && (
+            <button
+              onClick={async () => {
+                await api(`/jobs/${jobId}/resume`, { method: "POST" });
+                fetchJob();
+              }}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-500 transition-colors text-sm font-medium"
+            >
+              <Play size={16} /> Resume Job
+            </button>
           )}
 
-          {job.status === "error" && (
-            <span className="px-2 py-1 text-xs rounded bg-red-800 text-red-200">
-              ✕ Failed
-            </span>
+          {job.status === "running" && (
+            <button
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors text-sm font-medium border border-red-500/20"
+              onClick={async () => {
+                await api(`/jobs/${jobId}/cancel`, { method: "POST" });
+                fetchJob();
+              }}
+            >
+              <PauseCircle size={16} /> Cancel
+            </button>
           )}
-        </h1>
-
-        <p className="text-sm text-zinc-400">
-          State: <b>{job.state}</b> · Status: <b>{job.status}</b>
-        </p>
+        </div>
       </header>
+
+      {/* Error Banner */}
+      {job.status === "error" && job.error && (
+        <div className="p-4 rounded-xl bg-red-950/30 border border-red-500/30 text-red-200">
+          <h3 className="font-semibold flex items-center gap-2 mb-1 text-red-400">
+            <XCircle size={18} />
+            Pipeline Failed
+          </h3>
+          <p className="text-sm font-mono opacity-80 pl-6">
+            {job.error.message || "Unknown error occurred"}
+          </p>
+        </div>
+      )}
 
       {/* Metadata Card */}
       {hasMetadata && job.final_metadata && (
-        <section className="p-4 rounded bg-zinc-800 flex gap-4">
+        <section className="relative overflow-hidden p-6 rounded-2xl bg-zinc-900 border border-zinc-800/50 flex flex-col sm:flex-row gap-6">
+          {/* Background Glow */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl -z-10" />
+
           {/* Album art */}
-          {job.final_metadata.artworkUrl100 && (
-            <Image
-              src={job.final_metadata.artworkUrl100.replace(
-                "100x100",
-                "300x300"
-              )}
-              alt="Album art"
-              width={128}
-              height={128}
-              className="rounded"
-            />
-          )}
+          <div className="shrink-0 relative group">
+            {job.final_metadata.artworkUrl100 ? (
+              <Image
+                src={job.final_metadata.artworkUrl100.replace(
+                  "100x100",
+                  "600x600"
+                )}
+                alt="Album art"
+                width={160}
+                height={160}
+                className="rounded-xl shadow-2xl group-hover:scale-105 transition-transform duration-500"
+              />
+            ) : (
+              <div className="w-40 h-40 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-600">
+                <Music2 size={40} />
+              </div>
+            )}
+          </div>
 
           {/* Info */}
-          <div className="flex-1 space-y-2">
-            <div>
-              <h2 className="text-lg font-semibold">
+          <div className="flex-1 space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-2xl font-bold leading-tight">
                 {job.final_metadata.trackName}
               </h2>
-              <p className="text-sm text-zinc-300">
+              <div className="flex items-center gap-2 text-lg text-zinc-300">
+                <User2 size={18} className="text-zinc-500" />
                 {job.final_metadata.artistName}
-              </p>
-              <p className="text-xs text-zinc-400">
+              </div>
+              <div className="flex items-center gap-2 text-sm text-zinc-500">
+                <Disc size={16} />
                 {job.final_metadata.collectionName}
-              </p>
+              </div>
             </div>
 
             {/* Outcome */}
             {job.status === "success" && (
-              <div
-                className={`text-sm ${
-                  alreadyExists ? "text-yellow-400" : "text-green-400"
-                }`}
-              >
-                {alreadyExists
-                  ? "♻ This track already existed. Reused existing file."
-                  : "✓ Downloaded and saved successfully"}
+              <div className={cn(
+                "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border",
+                alreadyExists
+                  ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
+                  : "bg-green-500/10 text-green-500 border-green-500/20"
+              )}>
+                {alreadyExists ? (
+                  <>
+                    <AlertCircle size={14} />
+                    Track already exists
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={14} />
+                    Download complete
+                  </>
+                )}
               </div>
             )}
 
             {/* Path */}
             {job.status === "success" && result?.path && (
-              <div className="text-xs text-zinc-400">
-                Saved to:
-                <div className="mt-1 font-mono bg-zinc-900 p-2 rounded">
+              <div className="pt-2">
+                <div className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-1.5">Saved Location</div>
+                <code className="text-xs bg-black/30 px-3 py-2 rounded-lg text-zinc-400 font-mono block w-full overflow-x-auto">
                   {result.path}
-                </div>
+                </code>
               </div>
             )}
           </div>
@@ -197,86 +276,141 @@ export default function JobPage() {
       {/* USER_INTENT_SELECTION */}
       {isWaiting &&
         job.input_required?.type === "user_intent_selection" && (
-          <section className="space-y-3">
-            <p className="text-yellow-300 font-semibold">
-              Choose the correct track
+          <section className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex items-center gap-2 text-yellow-500">
+              <AlertCircle size={20} />
+              <h3 className="font-semibold">Multiple Matches Found</h3>
+            </div>
+
+            <p className="text-sm text-zinc-400">
+              Turn off "Interactive Mode" to auto-select the best match in the future.
             </p>
 
-            {job.input_required.choices.map((c, i) => (
-              <button
-                key={i}
-                className="w-full p-4 rounded bg-zinc-800 hover:bg-zinc-700 text-left"
-                onClick={async () => {
-                  await api(`/jobs/${jobId}/input`, {
-                    method: "POST",
-                    body: JSON.stringify({ choice: i }),
-                  });
-                  fetchJob();
-                }}
-              >
-                <div className="font-semibold">{c.title}</div>
-                <div className="text-sm text-zinc-400">
-                  {c.artists.join(", ")} · {c.album ?? "Single"}
-                </div>
-              </button>
-            ))}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {job.input_required.choices.map((c, i) => (
+                <button
+                  key={i}
+                  className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-blue-500/50 hover:bg-zinc-800/80 text-left transition-all group"
+                  onClick={async () => {
+                    await api(`/jobs/${jobId}/input`, {
+                      method: "POST",
+                      body: JSON.stringify({ choice: i }),
+                    });
+                    fetchJob();
+                  }}
+                >
+                  <div className="font-semibold group-hover:text-blue-400 transition-colors">{c.title}</div>
+                  <div className="text-sm text-zinc-400 mt-1">
+                    {c.artists.join(", ")}
+                  </div>
+                  {c.album && (
+                    <div className="text-xs text-zinc-500 mt-2 flex items-center gap-1">
+                      <Disc size={12} /> {c.album}
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
           </section>
         )}
 
       {/* USER_METADATA_SELECTION */}
       {isWaiting &&
         job.input_required?.type === "user_metadata_selection" && (
-          <section className="space-y-3">
-            <p className="text-yellow-300 font-semibold">
-              Select the correct metadata
-            </p>
+          <section className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+            <div className="flex items-center gap-2 text-yellow-500">
+              <AlertCircle size={20} />
+              <h3 className="font-semibold">Select Metadata</h3>
+            </div>
 
-            {job.input_required.choices.map((m, i) => (
-              <button
-                key={i}
-                className="w-full p-4 rounded bg-zinc-800 hover:bg-zinc-700 text-left"
-                onClick={async () => {
-                  await api(`/jobs/${jobId}/input`, {
-                    method: "POST",
-                    body: JSON.stringify({ choice: i }),
-                  });
-                  fetchJob();
-                }}
-              >
-                <div className="font-semibold">
-                  {m.trackName} — {m.artistName}
-                </div>
-                <div className="text-sm text-zinc-400">
-                  {m.collectionName} · score{" "}
-                  {m._score ? Math.round(m._score) : "?"}
-                </div>
-              </button>
-            ))}
+            <div className="space-y-2">
+              {job.input_required.choices.map((m, i) => (
+                <button
+                  key={i}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-blue-500/50 hover:bg-zinc-800/80 text-left transition-all group"
+                  onClick={async () => {
+                    await api(`/jobs/${jobId}/input`, {
+                      method: "POST",
+                      body: JSON.stringify({ choice: i }),
+                    });
+                    fetchJob();
+                  }}
+                >
+                  {m.artworkUrl100 ? (
+                    <Image
+                      src={m.artworkUrl100}
+                      alt=""
+                      width={48}
+                      height={48}
+                      className="rounded bg-zinc-800"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded bg-zinc-800 flex items-center justify-center">
+                      <Music2 size={20} className="text-zinc-600" />
+                    </div>
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold truncate group-hover:text-blue-400 transition-colors">
+                      {m.trackName}
+                    </div>
+                    <div className="text-sm text-zinc-400 truncate">
+                      {m.artistName} • {m.collectionName}
+                    </div>
+                  </div>
+
+                  <div className="text-xs font-mono text-zinc-500 bg-zinc-950 px-2 py-1 rounded">
+                    {m._score ? Math.round(m._score) : "?"}%
+                  </div>
+                </button>
+              ))}
+            </div>
           </section>
         )}
 
-      {/* Cancel */}
-      {job.status === "running" && (
+      {/* Debug Info */}
+      <div className="pt-8 border-t border-zinc-800">
         <button
-          className="px-4 py-2 rounded bg-red-700 hover:bg-red-600"
-          onClick={async () => {
-            await api(`/jobs/${jobId}/cancel`, { method: "POST" });
-            fetchJob();
-          }}
+          onClick={() => setShowLogs(!showLogs)}
+          className="flex items-center gap-2 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
         >
-          Cancel Job
+          <Terminal size={12} />
+          {showLogs ? "Hide Debug Data" : "Show Debug Data"}
         </button>
-      )}
 
-      {/* Raw JSON */}
-      <details>
-        <summary className="cursor-pointer text-sm text-zinc-400">
-          Raw job JSON
-        </summary>
-        <pre className="mt-2 bg-zinc-900 p-4 rounded text-sm overflow-auto">
-          {JSON.stringify(job, null, 2)}
-        </pre>
-      </details>
+        {showLogs && (
+          <pre className="mt-4 bg-black/50 p-4 rounded-xl text-xs font-mono text-zinc-500 overflow-auto max-h-96 border border-zinc-800">
+            {JSON.stringify(job, null, 2)}
+          </pre>
+        )}
+      </div>
     </main>
   );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const styles = {
+    running: "bg-blue-500/10 text-blue-500 border-blue-500/20",
+    waiting: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
+    success: "bg-green-500/10 text-green-500 border-green-500/20",
+    error: "bg-red-500/10 text-red-500 border-red-500/20",
+    cancelled: "bg-zinc-500/10 text-zinc-500 border-zinc-500/20",
+  }[status] || "bg-zinc-500/10 text-zinc-500 border-zinc-500/20";
+
+  const labels = {
+    running: "Processing",
+    waiting: "Input Required",
+    success: "Completed",
+    error: "Failed",
+    cancelled: "Cancelled"
+  }[status] || status;
+
+  return (
+    <span className={cn(
+      "px-2.5 py-0.5 rounded-full text-xs font-medium border uppercase tracking-wider",
+      styles
+    )}>
+      {labels}
+    </span>
+  )
 }
