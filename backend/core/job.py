@@ -109,6 +109,8 @@ class Job:
     locked_by: Optional[str] = None
 
     next_run_at: Optional[datetime] = None
+    
+    resume_from: Optional[PipelineState] = None
 
     def emit(self, message: str) -> None:
         self.last_message = message
@@ -144,6 +146,14 @@ class Job:
         self.updated_at = now
 
     def cancel(self, reason: str = "Cancelled by user") -> None:
+        if self.current_state not in (
+            PipelineState.FINALIZED,
+            PipelineState.FAILED,
+            PipelineState.CANCELLED,
+        ):
+            self.resume_from = self.current_state
+    
+        self.release_lock()
         self.transition_to(PipelineState.CANCELLED)
         self.error_code = "CANCELLED"
         self.error_message = reason
@@ -204,6 +214,8 @@ class Job:
             "locked_at": self.locked_at.isoformat() if self.locked_at else None,
             "locked_by": self.locked_by,
             "next_run_at": self.next_run_at.isoformat() if self.next_run_at else None,
+            
+            "resume_from": self.resume_from.name if self.resume_from else None,
         }
 
     @classmethod
@@ -241,6 +253,9 @@ class Job:
 
         if data.get("next_run_at"):
             job.next_run_at = datetime.fromisoformat(data["next_run_at"])
+            
+        if data.get("resume_from"):
+            job.resume_from = PipelineState[data["resume_from"]]
 
         job.source_candidates = data.get("source_candidates", [])
         job.selected_source = data.get("selected_source")

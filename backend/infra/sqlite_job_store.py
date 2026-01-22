@@ -1,6 +1,6 @@
 import sqlite3
 import json
-from typing import Optional, Iterable
+from typing import Optional, Iterable, List
 from datetime import datetime
 
 from infra.job_store import JobStore
@@ -170,3 +170,23 @@ class SQLiteJobStore(JobStore):
                 (key, job_id, now),
             )
             conn.commit()
+            
+    def list_jobs(self, limit: int = 50) -> List[Job]:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT data
+                FROM jobs
+                ORDER BY updated_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+    
+        jobs = []
+        for row in rows:
+            job_dict = json.loads(row["data"])
+            jobs.append(Job.from_dict(job_dict))
+    
+        return jobs

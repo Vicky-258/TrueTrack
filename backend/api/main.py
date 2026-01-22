@@ -1,18 +1,30 @@
 from fastapi import FastAPI, HTTPException, Header
+from fastapi.middleware.cors import CORSMiddleware
 from api.models import (
     CreateJobRequest,
     JobStatusResponse,
     JobInputRequest,
+    JobSummaryResponse
 )
 from core.states import PipelineState
 from core.job import Job, IdentityHint
 from infra.sqlite_job_store import SQLiteJobStore
 from core.job import JobOptions
 from typing import Optional
-
-store = SQLiteJobStore("jobs.db")
+from infra.store import store
+from dataclasses import asdict
 
 app = FastAPI(title="TrueTracks API")
+
+allow_origins=["http://localhost:3000"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def build_status(job: Job) -> JobStatusResponse:
     status = "running"
@@ -29,10 +41,16 @@ def build_status(job: Job) -> JobStatusResponse:
     if job.current_state == PipelineState.CANCELLED:
         status = "cancelled"
 
+    can_resume = (
+        job.current_state == PipelineState.CANCELLED
+        and job.resume_from is not None
+    )
+    
     response = JobStatusResponse(
         job_id=job.job_id,
         state=job.current_state.name,
         status=status,
+        can_resume=can_resume,
     )
 
     if status == "waiting":
@@ -42,13 +60,18 @@ def build_status(job: Job) -> JobStatusResponse:
         }
 
     if status == "success":
-        response.result = job.result.dict()
+        response.result = asdict(job.result)
+
 
     if status == "error":
         response.error = {
             "code": job.error_code,
             "message": job.error_message,
         }
+        
+    # Expose metadata once available
+    if job.final_metadata:
+        response.final_metadata = job.final_metadata
 
     return response
 
@@ -148,6 +171,7 @@ def provide_input(job_id: str, payload: JobInputRequest):
 @app.post("/jobs/{job_id}/cancel", response_model=JobStatusResponse)
 def cancel_job(job_id: str):
     job = store.get(job_id)
+    print("resume_from =", job.resume_from)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
 
@@ -161,4 +185,69 @@ def cancel_job(job_id: str):
     job.cancel()
     store.update(job)
 
+    return build_status(job)
+
+@app.get("/jobs")
+def list_jobs():
+    jobs = store.list_jobs(limit=50)
+
+    summaries = []
+    for job in jobs:
+        title = None
+        artist = None
+
+        if job.final_metadata:
+            title = job.final_metadata.get("trackName")
+            artist = job.final_metadata.get("artistName")
+        elif job.result:
+            title = job.result.title
+            artist = job.result.artist
+
+        summaries.append({
+            "job_id": job.job_id,
+            "status": (
+                "success"
+                if job.current_state == PipelineState.FINALIZED
+                else job.current_state.name.lower()
+            ),
+            "state": job.current_state.name,
+            "title": title,
+            "artist": artist,
+            "created_at": job.created_at.isoformat(),
+            "can_resume": (
+                job.current_state == PipelineState.CANCELLED
+                and job.resume_from is not None
+            ),
+        })
+
+    return summaries
+
+@app.post("/jobs/{job_id}/resume", response_model=JobStatusResponse)
+def resume_job(job_id: str):
+    job = store.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Only allow resume from CANCELLED or USER_* states
+    if job.current_state != PipelineState.CANCELLED and not job.current_state.name.startswith("USER_"):
+        raise HTTPException(
+            status_code=400,
+            detail="Job cannot be resumed from this state",
+        )
+
+    if not job.resume_from:
+        raise HTTPException(
+            status_code=400,
+            detail="No resume point recorded",
+        )
+
+    # Clear cancellation markers
+    job.error_code = None
+    job.error_message = None
+
+    # Restore intent (restart risky states safely)
+    job.current_state = job.resume_from
+    job.resume_from = None
+
+    store.update(job)
     return build_status(job)

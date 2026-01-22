@@ -59,3 +59,16 @@ class JobStatusResponse(BaseModel):
         default=None,
         description="Present only when job has failed"
     )
+    
+    final_metadata: Optional[Dict[str, Any]] = None
+    can_resume: bool = False
+
+class JobSummaryResponse(BaseModel):
+    job_id: str
+    status: str
+    state: str
+    title: Optional[str] = None
+    artist: Optional[str] = None
+    created_at: str
+    can_resume: bool = False
+

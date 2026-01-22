@@ -9,6 +9,7 @@ from core.states import PipelineState
 from core.job import Job
 from infra.sqlite_job_store import SQLiteJobStore
 from datetime import datetime
+from infra.store import store
 
 WORKER_ID = "worker-1"  # later: uuid / hostname
 LOCK_TTL_SECONDS = 60
@@ -88,6 +89,21 @@ class Worker:
         - exactly one pipeline.step() call
         - lock is ALWAYS released before return
         """
+        
+        # Reload job to catch external cancellation
+        fresh = self.store.get(job.job_id)
+        if not fresh:
+            return
+        
+        job = fresh
+        
+        if job.current_state == PipelineState.CANCELLED:
+            logging.info(
+                f"Job {job.job_id} was cancelled before execution step"
+            )
+            job.release_lock()
+            self.store.update(job)
+            return
     
         prev_state = job.current_state
         pipeline = create_pipeline()
@@ -129,6 +145,17 @@ class Worker:
             return
     
         # Persist successful step
+        # 🔥 Cancellation barrier BEFORE persisting new state
+        fresh = self.store.get(job.job_id)
+        if fresh and fresh.current_state == PipelineState.CANCELLED:
+            logging.info(
+                f"Job {job.job_id} cancelled during {prev_state.name}"
+            )
+            job.release_lock()
+            self.store.update(fresh)   # preserve CANCELLED
+            return
+        
+        # Only persist if not cancelled
         self.store.update(job)
     
         # -------------------------------------------------
@@ -184,12 +211,8 @@ class Worker:
 # -------------------------------------------------
 
 def main():
-
-    store = SQLiteJobStore("jobs.db")
-
     worker = Worker(store)
     worker.run_forever()
-
 
 if __name__ == "__main__":
     main()
