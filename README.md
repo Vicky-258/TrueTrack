@@ -3,300 +3,169 @@
 **TrueTrack** is a self-hosted, local-first music ingestion pipeline that turns vague track queries into **properly tagged, organized audio files** — with human-in-the-loop correction when needed.
 
 It runs as a **local service** (API + background worker + web UI), designed to be:
+* **Portable**: Runs entirely on your machine.
+* **Resilient**: Works on restricted networks.
+* **Transparent**: No cloud black boxes.
 
-* portable
-* debuggable
-* respectful of user control
-* resilient on restricted networks
-
-> Think: *“a local music brain, not a cloud black box.”*
+> Think: *“A local music brain that puts you in control.”*
 
 ---
 
 ## ✨ Features
 
-* 🔍 **Fuzzy track resolution**
-
-  * Handles ambiguous queries
-  * Pauses for user input when confidence is low
-* 🧠 **Human-in-the-loop pipeline**
-
-  * Intent selection
-  * Metadata selection
-  * Resume / cancel at any stage
-* ⚙️ **Stateful job system**
-
-  * Persistent job history
-  * Resume after crashes or restarts
-* 🎧 **Proper tagging & storage**
-
-  * Normalized metadata
-  * Deduplicated storage
-* 🖥️ **Web UI**
-
-  * Track job progress in real time
-  * Interactive conflict resolution
-* 🧩 **Local-first & self-hosted**
-
-  * No cloud dependency
-  * Runs entirely on your machine
+* 🔍 **Fuzzy Track Resolution**: Handles ambiguous queries and asks for help when needed.
+* 🧠 **Human-in-the-Loop**: You decide the correct intent and metadata.
+* ⚙️ **Stateful & Resumable**: Jobs persist across restarts and crashes.
+* 🎧 **High-Quality Storage**: Normalized metadata, deduplication, and proper organization.
+* 🖥️ **Modern Web UI**: Track progress, resolve conflicts, and manage your library.
+* 🧩 **Local-First**: No external cloud accounts required.
 
 ---
 
-## 🧠 Architecture Overview
+## 🚀 Quick Start
 
-TrueTrack is composed of **three cooperating parts**:
+### 1. Prerequisites
+* **Git** installed.
+* **Internet Connection** (for initial install & metadata).
+* **Linux, macOS, or Windows**.
 
-```
-┌────────────┐
-│  Frontend  │  (Next.js SPA)
-└─────▲──────┘
-      │ HTTP
-┌─────┴──────┐
-│    API     │  (FastAPI)
-│ job control│
-└─────▲──────┘
-      │ shared store
-┌─────┴──────┐
-│   Worker   │  (background executor)
-│ pipeline   │
-└────────────┘
-```
+### 2. Installation
 
-### Key design choices
+TrueTrack comes with automated installers that ensure you have everything you need (Python, Node.js, etc.).
 
-* **API never executes jobs**
-* **Worker executes exactly one pipeline step per tick**
-* **All state is persisted**
-* **Cancellation and resume are first-class**
-
-This makes the system:
-
-* crash-safe
-* inspectable
-* predictable
-
----
-
-## 📦 Project Structure
-
-```
-truetrack/
-├── app.py                # canonical entrypoint
-├── api/                  # FastAPI routes & schemas
-├── core/                 # pipeline logic & states
-├── worker/               # background worker runtime
-├── infra/                # persistence layer
-├── frontend/             # web UI (Next.js)
-├── utils/                # shared helpers
-├── install.sh            # Unix installer
-├── install.ps1           # Windows installer
-├── run.sh                # Unix runner
-├── run.ps1               # Windows runner
-├── pyproject.toml        # Python deps
-└── uv.lock               # locked environment
-```
-
----
-
-## ✅ System Requirements
-
-TrueTrack intentionally keeps requirements minimal and explicit.
-
-### Required
-
-* **Python ≥ 3.11**
-* **ffmpeg** available in `PATH`
-* Internet access for:
-
-  * YouTube / metadata APIs
-  * initial install
-
-### Supported Platforms
-
-* Linux
-* macOS
-* Windows (PowerShell)
-
-> No admin / sudo access required.
-
----
-
-## 🚀 Installation
-
-### Linux / macOS
+#### 🐧 Linux / 🍎 macOS
+Open your terminal and run:
 
 ```bash
-curl -fsSL https://truetrack.sh/install.sh | sh
+./install/install_unix.sh
 ```
 
-### Windows (PowerShell)
+#### 🪟 Windows
+Open PowerShell as Administrator and run:
 
 ```powershell
-iwr https://truetrack.sh/install.ps1 -useb | iex
+.\install\install_windows.ps1
 ```
 
 The installer will:
-
-1. Check system requirements
-2. Install `uv` if missing
-3. Download TrueTrack into `~/.truetrack`
-4. Install dependencies
+1. Check your system dependencies.
+2. Install Python, Node.js, and other tools if missing.
+3. Configure your environment (`.env`).
+4. Build the project.
+5. Offer to create a **Desktop Launcher** and **Global Command** (`truetrack`).
 
 ---
 
-## ▶️ Running TrueTrack
+## ▶️ Usage
 
-### Linux / macOS
+Once installed, you can start TrueTrack in three ways:
+
+### 1. Desktop Launcher (Recommended)
+Double-click the **TrueTrack** icon on your Desktop (if you accepted the option during install).
+* This starts the server and opens your browser automatically.
+* To stop, simply close the terminal window that opens.
+
+### 2. Global Command
+Open any terminal and type:
 
 ```bash
-~/.truetrack/run.sh
+truetrack
 ```
 
-### Windows
+### 3. Manual Start
+If you prefer the manual route:
 
+**Unix/macOS:**
+```bash
+cd ~/.truetrack
+./run.sh
+```
+
+**Windows:**
 ```powershell
-$HOME\.truetrack\run.ps1
+cd $env:LOCALAPPDATA\TrueTrack
+.\run.ps1
 ```
 
-By default, the service starts on:
-
-```
-http://127.0.0.1:8000
-```
-
-Open this in your browser to access the UI.
+The app runs at: **http://127.0.0.1:8000** (default)
 
 ---
 
 ## ⚙️ Configuration
 
-TrueTrack is configured entirely via **environment variables**.
+TrueTrack uses a `.env` file for configuration. The installer generates this for you, but you can customize it located in your install directory (`~/.truetrack` or `%LOCALAPPDATA%\TrueTrack`).
 
-| Variable              | Default                 | Description       |
-| --------------------- | ----------------------- | ----------------- |
-| `TRUETRACK_HOST`      | `127.0.0.1`             | Bind address      |
-| `TRUETRACK_PORT`      | `8000`                  | API/UI port       |
-| `TRUETRACK_LOG_LEVEL` | `info`                  | Logging verbosity |
-| `ALLOWED_ORIGINS`     | `http://localhost:3000` | CORS              |
+**Key Settings:**
 
-You can override these before running:
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `MUSIC_LIBRARY_ROOT` | `~/Music` | Where your music files are stored. |
+| `TRUETRACK_PORT` | `8000` | Port for the Web UI and API. |
+| `TRUETRACK_HOST` | `127.0.0.1` | Network address to bind to. |
 
-```bash
-export TRUETRACK_PORT=9000
-./run.sh
+To apply changes, restart TrueTrack.
+
+---
+
+## 🧠 Architecture
+
+TrueTrack is composed of three cooperating local parts:
+
+```
+┌────────────┐
+│  Frontend  │  (Next.js Web UI)
+└─────▲──────┘
+      │ HTTP
+┌─────┴──────┐
+│    API     │  (FastAPI Server)
+│ job control│
+└─────▲──────┘
+      │ Shared Database (SQLite)
+┌─────┴──────┐
+│   Worker   │  (Background Pipeline)
+│ pipeline   │
+└────────────┘
+```
+
+* **API**: Manages job state and control flow (never executes heavy tasks).
+* **Worker**: Executes the pipeline steps (downloading, tagging, moving) one by one.
+* **Frontend**: Provides the user interface for monitoring and control.
+
+---
+
+## 📂 Project Structure
+
+```
+truetrack/
+├── install/              # Installer scripts
+│   ├── install_unix.sh
+│   ├── install_windows.ps1
+│   └── common/           # Shared installer logic & assets
+├── assets/               # Static assets (icons)
+├── api/                  # Backend API (FastAPI)
+├── core/                 # Pipeline logic & state machine
+├── worker/               # Background worker runtime
+├── infra/                # Database & persistence
+├── frontend/             # Web UI (Next.js)
+├── run.sh / .ps1         # Runtime wrappers
+└── .env                  # Configuration file
 ```
 
 ---
 
-## 🧪 Job Lifecycle
+## ❓ Troubleshooting
 
-Each track request becomes a **job** that moves through explicit states:
+**"Dependencies missing"**
+Run the installer again. It is idempotent and will fix missing tools.
 
-```
-RESOLVING_IDENTITY
-→ USER_INTENT_SELECTION (optional)
-→ SEARCHING
-→ DOWNLOADING
-→ EXTRACTING
-→ MATCHING_METADATA
-→ USER_METADATA_SELECTION (optional)
-→ TAGGING
-→ STORING
-→ FINALIZED
-```
+**"Port already in use"**
+Edit your `.env` file and change `TRUETRACK_PORT` to something else (e.g., 9000), then restart.
 
-### Control operations
-
-* Cancel at any time
-* Resume from safe checkpoints
-* Inspect full state history
+**"Browser didn't open"**
+You can manually visit the URL printed in the terminal (usually `http://127.0.0.1:8000`).
 
 ---
 
-## 🔁 Resume & Fault Tolerance
+## 📜 License
 
-TrueTrack is designed to survive:
-
-* crashes
-* restarts
-* power loss
-* user cancellation
-
-All jobs are persisted in a local database and can be resumed safely.
-
----
-
-## 🔐 Security Model
-
-TrueTrack assumes a **trusted local environment**.
-
-* No authentication by default
-* Intended for localhost / LAN use
-* For exposure beyond localhost:
-
-  * use a reverse proxy
-  * add authentication externally
-
----
-
-## 🐳 Docker Support (Optional)
-
-Docker support is **best-effort** and may not work on restricted networks.
-
-TrueTrack does **not require Docker** and is intentionally designed to run without it.
-
----
-
-## 🧹 Uninstall
-
-TrueTrack is fully self-contained.
-
-```bash
-rm -rf ~/.truetrack
-```
-
-No system files are touched.
-
----
-
-## 🗺️ Roadmap (Non-binding)
-
-* `truetrack` CLI command
-* Config file (`truetrack.toml`)
-* Plugin system
-* Optional auth
-* CI-built Docker images
-
----
-
-## 📜 Philosophy
-
-TrueTrack prioritizes:
-
-* **clarity over cleverness**
-* **explicit state over hidden magic**
-* **user control over automation**
-* **portability over infrastructure hype**
-
----
-
-## ❤️ A Note on Scope
-
-TrueTrack is a **personal, self-hosted tool**.
-
-It is not:
-
-* a commercial service
-* a DRM bypass tool
-* a cloud scraper
-
-Use responsibly.
-
----
-
-## 🏁 Status
-
-> **TrueTrack is feature-complete and stable for local use.**
-
-Docker and packaging improvements may come later, but the core system is finished.
+MIT License. Local, personal use is encouraged.
