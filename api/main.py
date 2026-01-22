@@ -83,7 +83,9 @@ def create_app(*, host: str, port: int) -> FastAPI:
     # Infra
     # ----------------------------------
 
-    db_path = os.getenv("TRUETRACK_DB_PATH", "jobs.db")
+    from core.config import Config
+    
+    db_path = str(Config.DB_PATH)
     store: JobStore = SQLiteJobStore(db_path)
     worker = WorkerRuntime(store)
 

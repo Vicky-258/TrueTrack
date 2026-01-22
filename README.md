@@ -91,6 +91,14 @@ The app runs at: **http://127.0.0.1:8000** (default)
 
 ---
 
+## Configuration Invariant
+
+TrueTrack stores all persistent data at the path defined by `TRUETRACK_DB_PATH`. 
+This environment variable is **REQUIRED**. If unset, the application will fail to start.
+
+The installers (`install_unix.sh` and `install_windows.ps1`) automatically configure this for you.
+If running manually, ensure you load the `.env` file or export the variable before starting the application.
+
 ## ⚙️ Configuration
 
 TrueTrack uses a `.env` file for configuration. The installer generates this for you, but you can customize it located in your install directory (`~/.truetrack` or `%LOCALAPPDATA%\TrueTrack`).
@@ -100,6 +108,7 @@ TrueTrack uses a `.env` file for configuration. The installer generates this for
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `MUSIC_LIBRARY_ROOT` | `~/Music` | Where your music files are stored. |
+| `TRUETRACK_DB_PATH` | **REQUIRED** | Absolute path to the SQLite database. |
 | `TRUETRACK_PORT` | `8000` | Port for the Web UI and API. |
 | `TRUETRACK_HOST` | `127.0.0.1` | Network address to bind to. |
 

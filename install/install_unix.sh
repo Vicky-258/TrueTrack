@@ -176,7 +176,7 @@ main() {
     echo ""
     echo "You can start TrueTrack using:"
     echo "  • Desktop launcher (if created)"
-    echo "  • Global command: truetrack"
+    echo "  • Global command: truetrack (requires ~/.local/bin in PATH)"
     echo "  • Manual: cd $target_dir && ./run.sh"
     echo ""
     echo "TrueTrack runs in your browser at:"

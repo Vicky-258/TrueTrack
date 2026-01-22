@@ -19,22 +19,26 @@ setup_integration() {
     # 1. Global Launcher (~/.local/bin/truetrack)
     # ---------------------------------------------------------
     local bin_dir="$HOME/.local/bin"
-    local launcher="$bin_dir/truetrack"
+    local symlink="$bin_dir/truetrack"
 
-    if [[ -d "$bin_dir" ]] || mkdir -p "$bin_dir" 2>/dev/null; then
-        cat > "$launcher" <<EOF
-#!/bin/sh
-exec "$run_script" "\$@"
-EOF
-        chmod +x "$launcher"
-        log_success "Created global launcher at $launcher"
-
-        # Check PATH (Informational only)
-        if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
-            log_warn "$bin_dir is not in your PATH. Add it manually to run 'truetrack' globally."
+    if mkdir -p "$bin_dir" 2>/dev/null; then
+        if ln -sf "$run_script" "$symlink"; then
+            log_success "Installed global command: $symlink"
+            
+            # Check PATH (Informational only - DO NOT MODIFY)
+            if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
+                log_warn "$bin_dir is not in your PATH."
+                echo "To run 'truetrack' globally, add this to your shell config:"
+                echo ""
+                echo "  Bash/Zsh: export PATH=\"\$HOME/.local/bin:\$PATH\""
+                echo "  Fish:     set -Ua fish_user_paths ~/.local/bin"
+                echo ""
+            fi
+        else
+            log_warn "Failed to create symlink at $symlink"
         fi
     else
-        log_warn "Could not create $bin_dir. Skipping global launcher."
+        log_warn "Could not create $bin_dir. Skipping global command."
     fi
 
     # 2. Desktop Shortcut
