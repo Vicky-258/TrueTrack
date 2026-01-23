@@ -1,9 +1,7 @@
 import shutil
 from pathlib import Path
 
-from core.config import Config
 
-LIBRARY_ROOT = Config.LIBRARY_ROOT
 
 
 def ensure_dir(path: Path):

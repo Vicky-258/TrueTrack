@@ -11,6 +11,8 @@ from api.models import (
     JobInputRequest,
 )
 
+from api.routes import settings
+
 from core.states import PipelineState
 from core.job import Job, IdentityHint, JobOptions
 from infra.sqlite_job_store import SQLiteJobStore
@@ -301,6 +303,7 @@ def create_app(*, host: str, port: int) -> FastAPI:
     # ----------------------------------
 
     app.include_router(api)
+    app.include_router(settings.router)
 
     # ----------------------------------
     # Frontend Proxy (Next.js Standalone)

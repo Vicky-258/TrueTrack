@@ -19,8 +19,9 @@ from core.scoring import score_metadata
 
 from utils.paths import ensure_job_temp_dir
 from utils.metadata import search_itunes
-from utils.storage import ensure_dir, safe_filename, LIBRARY_ROOT
+from utils.storage import ensure_dir, safe_filename
 from utils.tagging import fetch_album_art
+from core.app_config import AppConfig
 
 
 # =========================
@@ -332,11 +333,12 @@ def handle_tagging(job: Job):
 def handle_storage(job: Job):
     job.emit("Saving track to music library")
 
-    ensure_dir(LIBRARY_ROOT)
+    library_root = AppConfig.get_music_library_root()
+    ensure_dir(library_root)
 
     title = safe_filename(job.final_metadata["trackName"])
     artist = safe_filename(job.final_metadata["artistName"])
-    final_path = LIBRARY_ROOT / f"{title} - {artist}.mp3"
+    final_path = library_root / f"{title} - {artist}.mp3"
 
     if final_path.exists():
         job.result.success = True
@@ -369,7 +371,8 @@ def handle_storage(job: Job):
 def handle_archiving(job: Job):
     job.emit("No reliable metadata found — archiving track")
 
-    archive_dir = LIBRARY_ROOT / "_Unidentified"
+    library_root = AppConfig.get_music_library_root()
+    archive_dir = library_root / "_Unidentified"
     ensure_dir(archive_dir)
 
     hint = job.identity_hint

@@ -72,3 +72,13 @@ class JobSummaryResponse(BaseModel):
     created_at: str
     can_resume: bool = False
 
+
+class UpdateMusicLibraryRequest(BaseModel):
+    path: str = Field(
+        ...,
+        description="Absolute path to the new music library root"
+    )
+
+class SettingsResponse(BaseModel):
+    music_library_path: str
+    source: Literal["db", "env", "default"]

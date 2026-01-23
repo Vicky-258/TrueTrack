@@ -3,11 +3,8 @@ from pathlib import Path
 
 class Config:
 
-    DEFAULT_LIBRARY_ROOT = Path.home() / "Music" / "library"
-
-    LIBRARY_ROOT = Path(
-        os.getenv("MUSIC_LIBRARY_ROOT", DEFAULT_LIBRARY_ROOT)
-    ).expanduser()
+    # Raw environment variable fallback (optional)
+    ENV_MUSIC_LIBRARY_ROOT = os.getenv("MUSIC_LIBRARY_ROOT")
 
     try:
         DB_PATH = Path(os.environ["TRUETRACK_DB_PATH"])
