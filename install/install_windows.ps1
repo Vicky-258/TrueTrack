@@ -37,13 +37,6 @@ if ($CurrentPolicy -ne 'Unrestricted' -and $CurrentPolicy -ne 'Bypass' -and $Cur
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-# Parameters
-param(
-    [switch]$DryRun,     # Simulate actions only
-    [switch]$Force,      # Ignore state file
-    [switch]$NoColor     # Disable ANSI colors
-)
-
 # Paths
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
