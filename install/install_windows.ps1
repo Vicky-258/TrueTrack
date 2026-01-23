@@ -481,7 +481,9 @@ function Main {
             # It doesn't explicitly define the CLI implementation here, but implies we should expose it.
             # Using a simple wrapper that calls the python module is safest.
             
-            $CmdContent = "@echo off`r`n`"$InstallDir\.venv\Scripts\python.exe`" -m backend.cli %*"
+            # Fix: Update to point to run.ps1 which handles start/stop/status lifecycle
+            # Using PowerShell to invoke the runtime manager
+            $CmdContent = "@echo off`r`ncd /d `"$InstallDir`"`r`npowershell -ExecutionPolicy Bypass -File `"$InstallDir\run.ps1`" %*"
             Set-Content -Path $GlobalCmdPath -Value $CmdContent
             
             # Add bin to PATH
@@ -489,22 +491,48 @@ function Main {
             
             # 2. Desktop Shortcut
             $WshShell = New-Object -ComObject WScript.Shell
-            $ShortcutPath = "$env:USERPROFILE\Desktop\TrueTrack.lnk"
-            $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
-            $Shortcut.TargetPath = "$BinDir\truetrack.cmd"
-            $Shortcut.Arguments = "start" # Default to start
-            $Shortcut.WorkingDirectory = $InstallDir
+            
+            # Reliable Desktop Path (Handles OneDrive redirection)
+            $DesktopPath = [Environment]::GetFolderPath("Desktop")
+            $ShortcutPath = Join-Path $DesktopPath "TrueTrack.lnk"
             
             try {
-                $Shortcut.IconLocation = "$InstallDir\frontend\public\favicon.ico"
+                # Force Overwrite: Remove existing if present
+                if (Test-Path $ShortcutPath) { Remove-Item -Force $ShortcutPath -ErrorAction SilentlyContinue }
+                
+                $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
+                $Shortcut.TargetPath = "$BinDir\truetrack.cmd"
+                $Shortcut.Arguments = "start"
+                $Shortcut.WorkingDirectory = $InstallDir
+                try { $Shortcut.IconLocation = "$InstallDir\frontend\public\favicon.ico" } catch {}
+                $Shortcut.Description = "Start TrueTrack"
                 $Shortcut.Save()
-                Write-Log -Level SUCCESS "Shortcut created at $ShortcutPath"
+                Write-Log -Level SUCCESS "Desktop shortcut created."
             } catch {
-                Write-Log -Level WARN "Failed to create desktop shortcut: $_"
-                Write-Log -Level INFO "You can still launch the app using 'truetrack start' or from $BinDir"
+                Write-Log -Level WARN "Failed to create Desktop shortcut (OneDrive/Permission issue?): $_"
+                
+                # Fallback: Start Menu
+                try {
+                    Write-Log -Level INFO "Attempting Start Menu shortcut..."
+                    $StartMenu = [Environment]::GetFolderPath("StartMenu")
+                    $StartPath = Join-Path $StartMenu "Programs\TrueTrack.lnk"
+                    
+                    # Force Overwrite
+                    if (Test-Path $StartPath) { Remove-Item -Force $StartPath -ErrorAction SilentlyContinue }
+
+                    $Shortcut = $WshShell.CreateShortcut($StartPath)
+                    $Shortcut.TargetPath = "$BinDir\truetrack.cmd"
+                    $Shortcut.Arguments = "start"
+                    $Shortcut.WorkingDirectory = $InstallDir
+                    try { $Shortcut.IconLocation = "$InstallDir\frontend\public\favicon.ico" } catch {}
+                    $Shortcut.Save()
+                    Write-Log -Level SUCCESS "Start Menu shortcut created."
+                } catch {
+                    Write-Log -Level WARN "Could not create Start Menu shortcut either."
+                }
             }
             
-            Write-Log -Level SUCCESS "Shortcuts created."
+            Write-Log -Level INFO "You can always launch the app using 'truetrack start' from any terminal."
         }
         Set-State "Step_Shortcuts_Created" $true
     }
@@ -515,11 +543,12 @@ function Main {
     # 1. Check if backend can be imported/help runs
     if (-not $DryRun) {
         $TestCmd = "$InstallDir\.venv\Scripts\python.exe"
-        $TestArgs = "-c `"(import backend.cli); print('Backend OK')`""
+        $TestArgs = "-c `"import api.main; print('Backend OK')`""
         
         # Simple execution test
         try {
-            $Process = Start-Process -FilePath $TestCmd -ArgumentList $TestArgs -NoNewWindow -PassThru -Wait
+            # We must set WorkingDirectory for the test process too, otherwise import fails
+            $Process = Start-Process -FilePath $TestCmd -ArgumentList $TestArgs -WorkingDirectory $InstallDir -NoNewWindow -PassThru -Wait
             if ($Process.ExitCode -eq 0) {
                  Write-Log -Level SUCCESS "Backend verification passed."
             } else {
