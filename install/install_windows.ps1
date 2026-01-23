@@ -8,6 +8,13 @@
 # 4. Self-Healing (Fixes PATH, installs dependencies)
 # ==============================================================================
 
+# Parameters
+param(
+    [switch]$DryRun,     # Simulate actions only
+    [switch]$Force,      # Ignore state file
+    [switch]$NoColor     # Disable ANSI colors
+)
+
 # ------------------------------------------------------------------------------
 # 0. BOOTSTRAP & SELF-ELEVATION
 # ------------------------------------------------------------------------------
