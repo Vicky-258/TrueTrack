@@ -57,12 +57,17 @@ def main() -> None:
         format="[TRUETRACK] %(asctime)s | %(levelname)s | %(message)s",
     )
 
-    logging.info("Starting Next.js frontend (standalone)...")
-    next_proc = start_next_standalone()
+    if os.getenv("TRUETRACK_SKIP_FRONTEND"):
+        logging.info("Skipping Next.js frontend (TRUETRACK_SKIP_FRONTEND set)...")
+        next_proc = None
+    else:
+        logging.info("Starting Next.js frontend (standalone)...")
+        next_proc = start_next_standalone()
 
     def shutdown_handler(*_):
         logging.info("Shutting down Next.js frontend...")
-        next_proc.terminate()
+        if next_proc:
+            next_proc.terminate()
 
     signal.signal(signal.SIGINT, shutdown_handler)
     signal.signal(signal.SIGTERM, shutdown_handler)
