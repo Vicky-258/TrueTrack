@@ -284,9 +284,34 @@ function Main {
         } else {
             Write-Log -Level INFO "uv missing. Installing..."
             if (-not $DryRun) {
-                # Official Powershell Install Command
-                irm https://astral.sh/uv/install.ps1 | iex
+                # Robust Install: Download script first, check it, then run.
+                # Prevents "Invoke-Expression" errors if network returns HTML/Garbage.
+                $UvInstallUrl = "https://astral.sh/uv/install.ps1"
+                $TempScript = "$env:TEMP\uv_install_$(Get-Random).ps1"
                 
+                try {
+                    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                    Invoke-WebRequest -Uri $UvInstallUrl -OutFile $TempScript -UseBasicParsing
+                    
+                    # Basic validation: Check if file exists and has content
+                    if ((Get-Item $TempScript).Length -gt 100) {
+                        Write-Log -Level INFO "Executing uv installer..."
+                        & $TempScript
+                    } else {
+                        throw "Downloaded installer script seems empty or invalid."
+                    }
+                } catch {
+                     Write-Log -Level ERROR "Failed to download/run uv installer: $_"
+                     Write-Log -Level WARN "Trying fallback method (irm | iex)..."
+                     try {
+                        irm $UvInstallUrl | iex
+                     } catch {
+                        Fail-Fatal "Could not install 'uv'. Network issue?" "Manually run: irm https://astral.sh/uv/install.ps1 | iex"
+                     }
+                } finally {
+                    if (Test-Path $TempScript) { Remove-Item $TempScript -ErrorAction SilentlyContinue }
+                }
+
                 # Manual Path Refresh attempt
                 $UV_Path = "$env:USERPROFILE\.local\bin"
                 if (Test-Path $UV_Path) { Add-ToPath $UV_Path }
