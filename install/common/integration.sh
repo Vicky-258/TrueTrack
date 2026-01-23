@@ -8,22 +8,24 @@ setup_integration() {
     local install_dir="$1"
     local run_script="$install_dir/run.sh"
     local dry_run="${2:-false}"
+    local interactive="${3:-false}"
 
-    log_info "Phase 7: Integration & Desktop Shortcuts"
+    log_info "Phase 7: Integration"
 
     if [[ "$dry_run" == "true" ]]; then
         log_info "Dry run: Skipping integration setup."
         return
     fi
 
-    # 1. Global Launcher (~/.local/bin/truetrack)
-    # ---------------------------------------------------------
+    # ==========================================================================
+    # Phase A: Global CLI Command (ALWAYS RUN)
+    # ==========================================================================
     local bin_dir="$HOME/.local/bin"
     local symlink="$bin_dir/truetrack"
 
     if mkdir -p "$bin_dir" 2>/dev/null; then
         if ln -sf "$run_script" "$symlink"; then
-            log_success "Installed global command: $symlink"
+            log_success "Global CLI command installed: $symlink"
             
             # Check PATH (Informational only - DO NOT MODIFY)
             if [[ ":$PATH:" != *":$bin_dir:"* ]]; then
@@ -41,8 +43,15 @@ setup_integration() {
         log_warn "Could not create $bin_dir. Skipping global command."
     fi
 
-    # 2. Desktop Shortcut
-    # ---------------------------------------------------------
+    # ==========================================================================
+    # Phase B: Desktop / GUI Integration (INTERACTIVE ONLY)
+    # ==========================================================================
+    if [[ "$interactive" != "true" ]]; then
+        log_warn "Non-interactive install detected. Skipping desktop integration."
+        return
+    fi
+    
+    log_info "Setting up Desktop Shortcut..."
     local icon_png="$install_dir/assets/icon/truetrack.png"
     local icon_icns="$install_dir/assets/icon/truetrack.icns"
     local has_icons=true

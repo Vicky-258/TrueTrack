@@ -9,9 +9,9 @@ __pycache__/
 # =====================================================
 # Python virtual environments (backend only)
 # =====================================================
-backend/venv/
-backend/.venv/
-backend/env/
+venv/
+.venv/
+env/
 
 # =====================================================
 # Python build / packaging artifacts

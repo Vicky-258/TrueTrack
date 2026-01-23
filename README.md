@@ -3,8 +3,9 @@
 **TrueTrack** is a self-hosted, local-first music ingestion pipeline that turns vague track queries into **properly tagged, organized audio files** — with human-in-the-loop correction when needed.
 
 It runs as a **local service** (API + background worker + web UI), designed to be:
+
 * **Portable**: Runs entirely on your machine.
-* **Resilient**: Works on restricted networks.
+* **Resilient**: Works reliably even on restricted or unstable networks.
 * **Transparent**: No cloud black boxes.
 
 > Think: *“A local music brain that puts you in control.”*
@@ -25,8 +26,9 @@ It runs as a **local service** (API + background worker + web UI), designed to b
 ## 🚀 Quick Start
 
 ### 1. Prerequisites
+
 * **Git** installed.
-* **Internet Connection** (for initial install & metadata).
+* **Internet Connection** (for initial install & metadata resolution).
 * **Linux, macOS, or Windows**.
 
 ### 2. Installation
@@ -34,20 +36,23 @@ It runs as a **local service** (API + background worker + web UI), designed to b
 TrueTrack comes with automated installers that ensure you have everything you need (Python, Node.js, etc.).
 
 #### 🐧 Linux / 🍎 macOS
+
 Open your terminal and run:
 
 ```bash
-./install/install_unix.sh
+curl -fsSL https://vicky-258.github.io/TrueTrack-Bootstrap/install.sh | bash
 ```
 
 #### 🪟 Windows
+
 Open PowerShell as Administrator and run:
 
 ```powershell
-.\install\install_windows.ps1
+iwr -useb https://vicky-258.github.io/TrueTrack-Bootstrap/install.ps1 | iex
 ```
 
 The installer will:
+
 1. Check your system dependencies.
 2. Install Python, Node.js, and other tools if missing.
 3. Configure your environment (`.env`).
@@ -61,11 +66,14 @@ The installer will:
 Once installed, you can start TrueTrack in three ways:
 
 ### 1. Desktop Launcher (Recommended)
+
 Double-click the **TrueTrack** icon on your Desktop (if you accepted the option during install).
+
 * This starts the server and opens your browser automatically.
 * To stop, simply close the terminal window that opens.
 
 ### 2. Global Command
+
 Open any terminal and type:
 
 ```bash
@@ -73,44 +81,51 @@ truetrack
 ```
 
 ### 3. Manual Start
+
 If you prefer the manual route:
 
 **Unix/macOS:**
+
 ```bash
 cd ~/.truetrack
 ./run.sh
 ```
 
 **Windows:**
+
 ```powershell
 cd $env:LOCALAPPDATA\TrueTrack
 .\run.ps1
 ```
 
-The app runs at: **http://127.0.0.1:8000** (default)
+The app runs at: **[http://127.0.0.1:8000](http://127.0.0.1:8000)** (default)
 
 ---
 
-## Configuration Invariant
+## 🔒 Configuration Invariant
 
-TrueTrack stores all persistent data at the path defined by `TRUETRACK_DB_PATH`. 
+TrueTrack stores all persistent data at the path defined by `TRUETRACK_DB_PATH`.
 This environment variable is **REQUIRED**. If unset, the application will fail to start.
 
 The installers (`install_unix.sh` and `install_windows.ps1`) automatically configure this for you.
 If running manually, ensure you load the `.env` file or export the variable before starting the application.
 
+---
+
 ## ⚙️ Configuration
 
-TrueTrack uses a `.env` file for configuration. The installer generates this for you, but you can customize it located in your install directory (`~/.truetrack` or `%LOCALAPPDATA%\TrueTrack`).
+TrueTrack uses a `.env` file for configuration. The installer generates this for you, but you can customize it in your install directory (`~/.truetrack` or `%LOCALAPPDATA%\TrueTrack`).
 
 **Key Settings:**
 
-| Variable | Default | Description |
-| :--- | :--- | :--- |
-| `MUSIC_LIBRARY_ROOT` | `~/Music` | Where your music files are stored. |
-| `TRUETRACK_DB_PATH` | **REQUIRED** | Absolute path to the SQLite database. |
-| `TRUETRACK_PORT` | `8000` | Port for the Web UI and API. |
-| `TRUETRACK_HOST` | `127.0.0.1` | Network address to bind to. |
+| Variable              | Default                 | Description                           |
+| :-------------------- | :---------------------- | :------------------------------------ |
+| `MUSIC_LIBRARY_ROOT`  | `~/Music`               | Where your music files are stored.    |
+| `TRUETRACK_DB_PATH`   | **REQUIRED**            | Absolute path to the SQLite database. |
+| `TRUETRACK_PORT`      | `8000`                  | Port for the Web UI and API.          |
+| `TRUETRACK_HOST`      | `127.0.0.1`             | Network address to bind to.           |
+| `ALLOWED_ORIGINS`     | `http://localhost:3000` | CORS allowed origins.                 |
+| `TRUETRACK_LOG_LEVEL` | `info`                  | API logging level.                    |
 
 To apply changes, restart TrueTrack.
 
@@ -137,8 +152,32 @@ TrueTrack is composed of three cooperating local parts:
 ```
 
 * **API**: Manages job state and control flow (never executes heavy tasks).
-* **Worker**: Executes the pipeline steps (downloading, tagging, moving) one by one.
+* **Worker**: Executes pipeline steps (downloading, tagging, moving) one by one.
 * **Frontend**: Provides the user interface for monitoring and control.
+
+---
+
+## 🧩 What “Resilient” Means
+
+In practice, resilience in TrueTrack means:
+
+* Jobs survive crashes, restarts, and power loss.
+* Once metadata is resolved, the pipeline can continue offline.
+* No dependency on accounts, tokens, or always-on cloud services.
+* Partial progress is never lost — work resumes from the last known safe state.
+
+---
+
+## 🚫 Non-Goals
+
+TrueTrack is intentionally **not**:
+
+* A streaming service
+* A recommendation engine
+* A cloud-synced or account-based music platform
+* A DRM circumvention or piracy tool
+
+Its focus is strictly on **local library ingestion, organization, and control**.
 
 ---
 
@@ -168,13 +207,15 @@ truetrack/
 Run the installer again. It is idempotent and will fix missing tools.
 
 **"Port already in use"**
-Edit your `.env` file and change `TRUETRACK_PORT` to something else (e.g., 9000), then restart.
+Edit your `.env` file and change `TRUETRACK_PORT` (e.g., to `9000`), then restart.
 
 **"Browser didn't open"**
-You can manually visit the URL printed in the terminal (usually `http://127.0.0.1:8000`).
+Manually visit the URL printed in the terminal (usually `http://127.0.0.1:8000`).
 
 ---
 
 ## 📜 License
 
-MIT License. Local, personal use is encouraged.
+MIT License.
+
+TrueTrack is designed for **local, personal library management**. Users are responsible for ensuring their usage complies with applicable local laws and content licenses.

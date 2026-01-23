@@ -145,11 +145,10 @@ main() {
     # --------------------------------------------------------------------------
     # Phase 7: Integration
     # --------------------------------------------------------------------------
-    if [[ -t 0 ]]; then
-        setup_integration "$target_dir" "${1-false}"
-    else
-        log_warn "Non-interactive install detected. Skipping desktop integration."
-    fi
+    local interactive=false
+    if [[ -t 0 ]]; then interactive=true; fi
+
+    setup_integration "$target_dir" "${1-false}" "$interactive"
 
     # --------------------------------------------------------------------------
     # Phase 6: Verification

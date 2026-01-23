@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from infra.job_store import JobStore
 from core.job import Job
 from core.states import PipelineState
+from pathlib import Path
 
 LOCK_TTL_SECONDS = 60
 
@@ -44,6 +45,11 @@ class SQLiteJobStore(JobStore):
 
     def __init__(self, db_path: str = "jobs.db"):
         self.db_path = db_path
+        
+        # Ensure parent directory exists
+        db_file = Path(self.db_path)
+        db_file.parent.mkdir(parents=True, exist_ok=True)
+        
         self._init_db()
 
     def _init_db(self) -> None:

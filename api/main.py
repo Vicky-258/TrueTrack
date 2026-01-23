@@ -2,7 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.models import (
@@ -18,6 +18,13 @@ from infra.job_store import JobStore
 from worker.runtime import WorkerRuntime
 from dataclasses import asdict
 from fastapi.responses import JSONResponse
+import httpx
+from fastapi import Request
+from fastapi.responses import Response, StreamingResponse
+from starlette.background import BackgroundTask
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+
 
 def build_status(job: Job) -> JobStatusResponse:
     status = "running"
@@ -70,12 +77,14 @@ def create_app(*, host: str, port: int) -> FastAPI:
     # ----------------------------------
     # Config
     # ----------------------------------
+    
+    api = APIRouter(prefix="/api")
 
     allowed_origins = [
         o.strip()
         for o in os.getenv(
             "ALLOWED_ORIGINS",
-            "http://localhost:3000",
+            f"http://{host}:{port}",
         ).split(",")
     ]
 
@@ -103,6 +112,19 @@ def create_app(*, host: str, port: int) -> FastAPI:
         title="TrueTrack API",
         lifespan=lifespan,
     )
+    
+    # ----------------------------------
+    # Serve Next.js static assets
+    # ----------------------------------
+    
+    NEXT_STATIC_DIR = Path(__file__).resolve().parent.parent / "frontend" / ".next" / "static"
+    
+    if NEXT_STATIC_DIR.exists():
+        app.mount(
+            "/_next/static",
+            StaticFiles(directory=NEXT_STATIC_DIR),
+            name="next-static",
+        )
 
     # ----------------------------------
     # Middleware
@@ -110,13 +132,13 @@ def create_app(*, host: str, port: int) -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=allowed_origins,
+        allow_origins=["*"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
-
-    @app.post("/jobs", response_model=JobStatusResponse)
+    
+    @api.post("/jobs", response_model=JobStatusResponse)
     def create_job(
         req: CreateJobRequest,
         idempotency_key: Optional[str] = Header(
@@ -142,14 +164,14 @@ def create_app(*, host: str, port: int) -> FastAPI:
 
         return build_status(job)
         
-    @app.get("/jobs/{job_id}", response_model=JobStatusResponse)
+    @api.get("/jobs/{job_id}", response_model=JobStatusResponse)
     def get_job(job_id: str):
         job = store.get(job_id)
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
         return build_status(job)
 
-    @app.post("/jobs/{job_id}/input", response_model=JobStatusResponse)
+    @api.post("/jobs/{job_id}/input", response_model=JobStatusResponse)
     def provide_input(job_id: str, payload: JobInputRequest):
         job = store.get(job_id)
         if not job:
@@ -195,7 +217,7 @@ def create_app(*, host: str, port: int) -> FastAPI:
         store.update(job)
         return build_status(job)
 
-    @app.post("/jobs/{job_id}/cancel", response_model=JobStatusResponse)
+    @api.post("/jobs/{job_id}/cancel", response_model=JobStatusResponse)
     def cancel_job(job_id: str):
         job = store.get(job_id)
         if not job:
@@ -211,7 +233,7 @@ def create_app(*, host: str, port: int) -> FastAPI:
 
         return build_status(job)
 
-    @app.get("/jobs")
+    @api.get("/jobs")
     def list_jobs():
         jobs = store.list_jobs(limit=50)
         summaries = []
@@ -246,7 +268,7 @@ def create_app(*, host: str, port: int) -> FastAPI:
 
         return summaries
 
-    @app.post("/jobs/{job_id}/resume", response_model=JobStatusResponse)
+    @api.post("/jobs/{job_id}/resume", response_model=JobStatusResponse)
     def resume_job(job_id: str):
         job = store.get(job_id)
         if not job:
@@ -269,11 +291,57 @@ def create_app(*, host: str, port: int) -> FastAPI:
         store.update(job)
         return build_status(job)
         
-    @app.get("/__config", include_in_schema=False)
+    @api.get("/__config", include_in_schema=False)
     def runtime_config():
         return JSONResponse({
             "api_base_url": f"http://{host}:{port}"
         })
+    # ----------------------------------
+    # Routes
+    # ----------------------------------
+
+    app.include_router(api)
+
+    # ----------------------------------
+    # Frontend Proxy (Next.js Standalone)
+    # ----------------------------------
+    
+    NEXT_BASE = "http://127.0.0.1:3001"
+    
+    @app.api_route(
+        "/{path:path}", 
+        methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+    )
+    async def proxy_frontend(request: Request, path: str):
+        url = f"{NEXT_BASE}/{path}" if path else f"{NEXT_BASE}/"
+        
+        req_headers = {
+            k: v for k, v in request.headers.items()
+            if k.lower() not in ("host", "content-length", "connection")
+        }
+        
+        client = httpx.AsyncClient(follow_redirects=True)
+        try:
+            req = client.build_request(
+                request.method, 
+                url, 
+                headers=req_headers,
+                content=await request.body()
+            )
+            r = await client.send(req, stream=True)
+            
+            return StreamingResponse(
+                r.aiter_bytes(),
+                status_code=r.status_code,
+                headers={
+                    k: v for k, v in r.headers.items() 
+                    if k.lower() not in ("content-encoding", "transfer-encoding", "connection")
+                },
+                background=BackgroundTask(client.aclose)
+            )
+        except Exception:
+            await client.aclose()
+            return JSONResponse({"error": "Frontend Unavailable"}, status_code=503)
 
     return app
 
