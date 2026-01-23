@@ -7,7 +7,26 @@ $ErrorActionPreference = "Stop"
 # ----------------------------------------------------------------------
 # Resolve script directory and switch to it
 # ----------------------------------------------------------------------
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+# ----------------------------------------------------------------------
+# Resolve script directory and switch to it (handles symlinks)
+# ----------------------------------------------------------------------
+$CurrentPath = $MyInvocation.MyCommand.Path
+$Item = Get-Item -LiteralPath $CurrentPath
+
+# Resolve symlinks if any
+while ($Item.LinkType -eq 'SymbolicLink') {
+    $Target = $Item.Target
+    
+    # Handle relative targets
+    if (-not [System.IO.Path]::IsPathRooted($Target)) {
+        $Target = Join-Path (Split-Path -Parent $Item.FullName) $Target
+    }
+    
+    $CurrentPath = (Get-Item -LiteralPath $Target).FullName
+    $Item = Get-Item -LiteralPath $CurrentPath
+}
+
+$ScriptDir = Split-Path -Parent $CurrentPath
 Set-Location $ScriptDir
 
 # ----------------------------------------------------------------------
