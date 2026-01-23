@@ -497,12 +497,12 @@ function Main {
             
             try {
                 $Shortcut.IconLocation = "$InstallDir\frontend\public\favicon.ico"
+                $Shortcut.Save()
+                Write-Log -Level SUCCESS "Shortcut created at $ShortcutPath"
             } catch {
-                Write-Log -Level DEBUG "Could not set shortcut icon."
+                Write-Log -Level WARN "Failed to create desktop shortcut: $_"
+                Write-Log -Level INFO "You can still launch the app using 'truetrack start' or from $BinDir"
             }
-            
-            $Shortcut.Description = "Start TrueTrack"
-            $Shortcut.Save()
             
             Write-Log -Level SUCCESS "Shortcuts created."
         }

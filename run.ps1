@@ -47,8 +47,14 @@ function Start-BackgroundProcess {
 
     Write-Host "Starting $Name..." -NoNewline
     
+    # Fix: Cannot redirect both stdout and stderr to the same file handle directly in Start-Process.
+    # We will redirect Output to LogFile, and Error to LogFile.err, or just let Error go to stream.
+    # Better approach for "same log": Use cmd /c wrapper or just redirect output.
+    # Let's use separate files to be safe and robust as per "God-Tier" standards.
+    $LogFileErr = $LogFile + ".err"
+    
     $Process = Start-Process -FilePath $Command -ArgumentList $Args `
-        -RedirectStandardOutput $LogFile -RedirectStandardError $LogFile `
+        -RedirectStandardOutput $LogFile -RedirectStandardError $LogFileErr `
         -PassThru -WindowStyle Hidden
 
     $Process.Id | Out-File -FilePath $PidFile -Encoding ascii -NoNewline
