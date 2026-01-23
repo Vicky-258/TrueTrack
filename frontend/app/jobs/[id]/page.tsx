@@ -204,11 +204,8 @@ export default function JobPage() {
           {/* Album art */}
           <div className="shrink-0 relative group">
             {job.final_metadata.artworkUrl100 ? (
-              <Image
-                src={job.final_metadata.artworkUrl100.replace(
-                  "100x100",
-                  "600x600"
-                )}
+              <img
+                src={job.final_metadata.artworkUrl100.replace("100x100", "600x600")}
                 alt="Album art"
                 width={160}
                 height={160}
