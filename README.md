@@ -17,7 +17,7 @@ It runs as a **local service** (API + background worker + web UI), designed to b
 * 🔍 **Fuzzy Track Resolution**: Handles ambiguous queries and asks for help when needed.
 * 🧠 **Human-in-the-Loop**: You decide the correct intent and metadata.
 * ⚙️ **Stateful & Resumable**: Jobs persist across restarts and crashes.
-* 🎧 **High-Quality Storage**: Normalized metadata, deduplication, and proper organization.
+* 🎧 **High-Quality Storage**: Normalized metadata, deduplication, and deterministic organization.
 * 🖥️ **Modern Web UI**: Track progress, resolve conflicts, and manage your library.
 * 🧩 **Local-First**: No external cloud accounts required.
 
@@ -104,7 +104,7 @@ The app runs at: **[http://127.0.0.1:8000](http://127.0.0.1:8000)** (default)
 
 ## 🔒 Configuration Invariant
 
-TrueTrack stores all persistent data at the path defined by `TRUETRACK_DB_PATH`.
+TrueTrack stores all job state and application settings at the path defined by TRUETRACK_DB_PATH.
 This environment variable is **REQUIRED**. If unset, the application will fail to start.
 
 The installers (`install_unix.sh` and `install_windows.ps1`) automatically configure this for you.
@@ -114,20 +114,19 @@ If running manually, ensure you load the `.env` file or export the variable befo
 
 ## ⚙️ Configuration
 
-TrueTrack uses a `.env` file for configuration. The installer generates this for you, but you can customize it in your install directory (`~/.truetrack` or `%LOCALAPPDATA%\TrueTrack`).
+TrueTrack uses a `.env` file for **bootstrap configuration** (server settings and database location). The installer generates this for you.
 
 **Key Settings:**
 
-| Variable              | Default                 | Description                           |
-| :-------------------- | :---------------------- | :------------------------------------ |
-| `MUSIC_LIBRARY_ROOT`  | `~/Music`               | Where your music files are stored.    |
-| `TRUETRACK_DB_PATH`   | **REQUIRED**            | Absolute path to the SQLite database. |
-| `TRUETRACK_PORT`      | `8000`                  | Port for the Web UI and API.          |
-| `TRUETRACK_HOST`      | `127.0.0.1`             | Network address to bind to.           |
-| `ALLOWED_ORIGINS`     | `http://localhost:3000` | CORS allowed origins.                 |
-| `TRUETRACK_LOG_LEVEL` | `info`                  | API logging level.                    |
+| Variable              | Description                                                                 |
+| :-------------------- | :-------------------------------------------------------------------------- |
+| `TRUETRACK_DB_PATH`   | **REQUIRED** — Absolute path to the SQLite database.                        |
+| `TRUETRACK_PORT`      | Port for the Web UI and API (default: `8000`).                              |
+| `TRUETRACK_HOST`      | Network address to bind to (default: `127.0.0.1`).                          |
+| `ALLOWED_ORIGINS`     | CORS allowed origins for the API.                                           |
+| `MUSIC_LIBRARY_ROOT`  | **OPTIONAL** — Fallback path if not set in the app.                         |
 
-To apply changes, restart TrueTrack.
+> **Note:** The Music Library location is managed within the application and persisted in the database. You do not need to edit `.env` to change it.
 
 ---
 
