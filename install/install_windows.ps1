@@ -61,7 +61,7 @@ function Main {
     # --------------------------------------------------------------------------
     Write-LogInfo "Phase 3: Resolving Paths"
     
-    $MusicRoot = "$env:USERPROFILE\Music"
+    $MusicRoot = "$env:USERPROFILE\Music\TrueTrack"
     $DbPath = "$TargetDir\data\jobs.db"
     
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $DbPath) | Out-Null

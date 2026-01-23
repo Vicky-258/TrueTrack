@@ -77,7 +77,7 @@ main() {
     # --------------------------------------------------------------------------
     log_info "Phase 3: Resolving Paths"
     
-    local music_root="$HOME/Music"
+    local music_root="$HOME/Music/TrueTrack"
     local db_path="$target_dir/data/jobs.db"
     
     mkdir -p "$(dirname "$db_path")"
