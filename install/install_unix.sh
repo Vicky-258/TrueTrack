@@ -115,24 +115,15 @@ main() {
         rm -rf ".venv"
     fi
     
-    # Prefer uv for venv creation if available
-    if command -v uv &> /dev/null; then
-        uv venv .venv --python 3.12
-    else
-        python3 -m venv .venv
-    fi
+    # Always use uv
+    uv venv .venv --python 3.12
 
     # Activate
     source .venv/bin/activate
 
     # Install Backend Deps
     log_info "Installing Backend Dependencies..."
-    if command -v uv &> /dev/null; then
-        uv sync
-    else
-        pip install --upgrade pip
-        pip install .
-    fi
+    uv sync
 
     # Frontend Setup
     log_info "Setting up Frontend..."

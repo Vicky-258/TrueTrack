@@ -98,14 +98,14 @@ function Main {
     }
     
     Write-LogInfo "Creating virtual environment..."
-    python -m venv .venv
+    uv venv .venv --python 3.12
     
     # Activate
     . ".venv\Scripts\Activate.ps1"
 
     # Backend Deps
     Write-LogInfo "Installing Backend Dependencies..."
-    pip install .
+    uv sync
 
     # Frontend
     Write-LogInfo "Setting up Frontend..."
