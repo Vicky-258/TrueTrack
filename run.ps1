@@ -43,7 +43,7 @@ function Get-RunningPid {
 }
 
 function Start-BackgroundProcess {
-    param($Command, $Args, $LogFile, $PidFile, $Name)
+    param($Command, $ProcArgs, $LogFile, $PidFile, $Name)
 
     Write-Host "Starting $Name..." -NoNewline
     
@@ -53,7 +53,7 @@ function Start-BackgroundProcess {
     # Let's use separate files to be safe and robust as per "God-Tier" standards.
     $LogFileErr = $LogFile + ".err"
     
-    $Process = Start-Process -FilePath $Command -ArgumentList $Args `
+    $Process = Start-Process -FilePath $Command -ArgumentList $ProcArgs `
         -RedirectStandardOutput $LogFile -RedirectStandardError $LogFileErr `
         -PassThru -WindowStyle Hidden
 
@@ -105,11 +105,11 @@ switch ($Command) {
         # 5. Launch
         
         # Backend
-        Start-BackgroundProcess -Command $Python -Args "app.py" `
+        Start-BackgroundProcess -Command $Python -ProcArgs "app.py" `
             -LogFile $ApiLog -PidFile $ApiPidFile -Name "Backend"
 
         # Worker
-        Start-BackgroundProcess -Command $Python -Args "worker/main.py" `
+        Start-BackgroundProcess -Command $Python -ProcArgs "worker/main.py" `
             -LogFile $WorkerLog -PidFile $WorkerPidFile -Name "Worker"
 
         # Frontend
@@ -125,7 +125,7 @@ switch ($Command) {
         # Since we can't easily pass env vars to Start-Process in legacy PS, we rely on Process scope env.
         # We need to set PORT=3001 specifically for the frontend Node process.
         $env:PORT = "3001" 
-        Start-BackgroundProcess -Command $Node -Args "`"$NextServer`"" `
+        Start-BackgroundProcess -Command $Node -ProcArgs "`"$NextServer`"" `
             -LogFile $FrontendLog -PidFile $FrontendPidFile -Name "Frontend"
         Remove-Item Env:\PORT # Clean up
 

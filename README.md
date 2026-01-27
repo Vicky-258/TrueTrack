@@ -61,6 +61,88 @@ The installer will:
 
 ---
 
+## 🚧 Windows Installer Status (Please Read)
+
+> **Short version:**
+> The Windows installer is **functional but not yet fully hardened**. Some edge cases remain, and active maintenance is temporarily paused.
+
+### What’s the situation?
+
+The Windows installer (`install.ps1`) handles significant platform complexity, including:
+
+* PowerShell 5.1 vs PowerShell 7 differences
+* Execution policy and elevation behavior
+* Python and Node.js bootstrapping
+* Environment variable and PATH persistence
+
+While the **core TrueTrack application is complete and stable**, there are **known rough edges** in the Windows installer on certain systems.
+
+These issues are **installer-only** and do **not** reflect architectural problems with TrueTrack itself.
+
+### Current State
+
+* ✅ **Linux / macOS installers**: Stable and reliable
+* ⚠️ **Windows installer**:
+
+  * Works on many systems
+  * Fails or behaves inconsistently on some setups
+  * Needs further hardening and edge-case handling
+
+### Why this isn’t fixed yet
+
+This project is currently **paused**, not abandoned.
+
+The Windows installer requires a careful, focused pass to be robust across environments. Rather than shipping rushed fixes or masking failures, the current state is documented transparently.
+
+### What you can do
+
+You have a few options:
+
+#### 🕒 Wait
+
+If you just want to *use* TrueTrack:
+
+* Feel free to star the repository
+* Check back later for a hardened Windows installer update
+
+#### 🧠 Help Debug
+
+If you’re comfortable with PowerShell:
+
+* Run the installer manually
+* Capture error output or logs
+* Open an issue including:
+
+  * Windows version
+  * PowerShell version
+  * Exact failure point
+
+#### 🔧 Contribute a Fix
+
+If you want to contribute directly:
+
+* Focus area: `install/install_windows.ps1`
+* Improvement goals:
+
+  * Consistent behavior across PS 5.1 / 7
+  * Better error detection and messaging
+  * Reduced reliance on global system state
+
+Pull requests and partial improvements are welcome.
+
+### Manual Workaround (Advanced Users)
+
+If the installer fails, you can still run TrueTrack manually by:
+
+1. Installing Python and Node.js yourself
+2. Cloning the repository
+3. Setting `TRUETRACK_DB_PATH`
+4. Starting the app using `run.ps1`
+
+This is **not recommended for casual users**, but it does work.
+
+---
+
 ## ▶️ Usage
 
 Once installed, you can start TrueTrack in three ways:
@@ -104,7 +186,7 @@ The app runs at: **[http://127.0.0.1:8000](http://127.0.0.1:8000)** (default)
 
 ## 🔒 Configuration Invariant
 
-TrueTrack stores all job state and application settings at the path defined by TRUETRACK_DB_PATH.
+TrueTrack stores all job state and application settings at the path defined by `TRUETRACK_DB_PATH`.
 This environment variable is **REQUIRED**. If unset, the application will fail to start.
 
 The installers (`install_unix.sh` and `install_windows.ps1`) automatically configure this for you.
@@ -118,13 +200,13 @@ TrueTrack uses a `.env` file for **bootstrap configuration** (server settings an
 
 **Key Settings:**
 
-| Variable              | Description                                                                 |
-| :-------------------- | :-------------------------------------------------------------------------- |
-| `TRUETRACK_DB_PATH`   | **REQUIRED** — Absolute path to the SQLite database.                        |
-| `TRUETRACK_PORT`      | Port for the Web UI and API (default: `8000`).                              |
-| `TRUETRACK_HOST`      | Network address to bind to (default: `127.0.0.1`).                          |
-| `ALLOWED_ORIGINS`     | CORS allowed origins for the API.                                           |
-| `MUSIC_LIBRARY_ROOT`  | **OPTIONAL** — Fallback path if not set in the app.                         |
+| Variable             | Description                                          |
+| -------------------- | ---------------------------------------------------- |
+| `TRUETRACK_DB_PATH`  | **REQUIRED** — Absolute path to the SQLite database. |
+| `TRUETRACK_PORT`     | Port for the Web UI and API (default: `8000`).       |
+| `TRUETRACK_HOST`     | Network address to bind to (default: `127.0.0.1`).   |
+| `ALLOWED_ORIGINS`    | CORS allowed origins for the API.                    |
+| `MUSIC_LIBRARY_ROOT` | **OPTIONAL** — Fallback path if not set in the app.  |
 
 > **Note:** The Music Library location is managed within the application and persisted in the database. You do not need to edit `.env` to change it.
 
