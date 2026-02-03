@@ -61,123 +61,75 @@ The installer will:
 
 ---
 
-## 🚧 Windows Installer Status (Please Read)
+## 🚧 Windows Support Status
 
-> **Short version:**
-> The Windows installer is **functional but not yet fully hardened**. Some edge cases remain, and active maintenance is temporarily paused.
+The Windows installer (`install.ps1`) has been significantly improved and should reliably set up your environment (including `uv`, Python, and Node.js). 
 
-### What’s the situation?
+However, the **application runtime on Windows** is currently under investigation. While the installation may succeed, you might encounter stability issues when running the application.
 
-The Windows installer (`install.ps1`) handles significant platform complexity, including:
+If the app fails to start or behaves unexpectedly on Windows, please:
+1. Run `truetrack doctor` to check for issues.
+2. Check the logs in `%LOCALAPPDATA%\TrueTrack\logs`.
 
-* PowerShell 5.1 vs PowerShell 7 differences
-* Execution policy and elevation behavior
-* Python and Node.js bootstrapping
-* Environment variable and PATH persistence
-
-While the **core TrueTrack application is complete and stable**, there are **known rough edges** in the Windows installer on certain systems.
-
-These issues are **installer-only** and do **not** reflect architectural problems with TrueTrack itself.
-
-### Current State
-
-* ✅ **Linux / macOS installers**: Stable and reliable
-* ⚠️ **Windows installer**:
-
-  * Works on many systems
-  * Fails or behaves inconsistently on some setups
-  * Needs further hardening and edge-case handling
-
-### Why this isn’t fixed yet
-
-This project is currently **paused**, not abandoned.
-
-The Windows installer requires a careful, focused pass to be robust across environments. Rather than shipping rushed fixes or masking failures, the current state is documented transparently.
-
-### What you can do
-
-You have a few options:
-
-#### 🕒 Wait
-
-If you just want to *use* TrueTrack:
-
-* Feel free to star the repository
-* Check back later for a hardened Windows installer update
-
-#### 🧠 Help Debug
-
-If you’re comfortable with PowerShell:
-
-* Run the installer manually
-* Capture error output or logs
-* Open an issue including:
-
-  * Windows version
-  * PowerShell version
-  * Exact failure point
-
-#### 🔧 Contribute a Fix
-
-If you want to contribute directly:
-
-* Focus area: `install/install_windows.ps1`
-* Improvement goals:
-
-  * Consistent behavior across PS 5.1 / 7
-  * Better error detection and messaging
-  * Reduced reliance on global system state
-
-Pull requests and partial improvements are welcome.
-
-### Manual Workaround (Advanced Users)
-
-If the installer fails, you can still run TrueTrack manually by:
-
-1. Installing Python and Node.js yourself
-2. Cloning the repository
-3. Setting `TRUETRACK_DB_PATH`
-4. Starting the app using `run.ps1`
-
-This is **not recommended for casual users**, but it does work.
+**What you can do:**
+*   **Wait for updates**: I am actively investigating these issues.
+*   **Report bugs**: If you can pinpoint the cause of a failure, please [open an issue](https://github.com/vicky-258/TrueTrack/issues).
+*   **Contribute**: If you are comfortable with Windows development and find a fix, pull requests are highly welcome!
 
 ---
 
 ## ▶️ Usage
 
-Once installed, you can start TrueTrack in three ways:
+Once installed, usage is managed via the `truetrack` command (or `run.sh`/`run.ps1` if running manually).
 
-### 1. Desktop Launcher (Recommended)
+### 1. Global Command (Recommended)
 
-Double-click the **TrueTrack** icon on your Desktop (if you accepted the option during install).
+Open any terminal and use the following commands:
 
-* This starts the server and opens your browser automatically.
-* To stop, simply close the terminal window that opens.
+* **Start** (Default):
+  ```bash
+  truetrack
+  # OR
+  truetrack start
+  ```
+  Launches the Backend, Worker, and Frontend in the background.
 
-### 2. Global Command
+* **Stop**:
+  ```bash
+  truetrack stop
+  ```
+  Gracefully stops all running components.
 
-Open any terminal and type:
+* **Status**:
+  ```bash
+  truetrack status
+  ```
+  Shows running processes and the Web UI URL.
 
-```bash
-truetrack
-```
+* **Doctor**:
+  ```bash
+  truetrack doctor
+  ```
+  Checks system health and dependencies. Can also fix issues (e.g., `truetrack doctor --fix yt-dlp`).
+
+### 2. Desktop Launcher
+
+Double-click the **TrueTrack** icon on your Desktop.
+* This is equivalent to running `truetrack start`.
+* To stop the application later, run `truetrack stop` in a terminal.
 
 ### 3. Manual Start
 
-If you prefer the manual route:
+If you are running from source without the global alias:
 
 **Unix/macOS:**
-
 ```bash
-cd ~/.truetrack
-./run.sh
+./run.sh [start|stop|status|doctor]
 ```
 
 **Windows:**
-
 ```powershell
-cd $env:LOCALAPPDATA\TrueTrack
-.\run.ps1
+.\run.ps1 [start|stop|status|doctor]
 ```
 
 The app runs at: **[http://127.0.0.1:8000](http://127.0.0.1:8000)** (default)
@@ -285,7 +237,8 @@ truetrack/
 ## ❓ Troubleshooting
 
 **"Dependencies missing"**
-Run the installer again. It is idempotent and will fix missing tools.
+Run `truetrack doctor` to identify missing tools.
+Run the installer again or use `truetrack doctor --fix yt-dlp` if specific tools are outdated.
 
 **"Port already in use"**
 Edit your `.env` file and change `TRUETRACK_PORT` (e.g., to `9000`), then restart.
