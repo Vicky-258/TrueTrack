@@ -1,5 +1,8 @@
-from typing import Callable, Dict
+from typing import Callable, Dict, Literal
 from pathlib import Path
+from datetime import datetime, timezone
+import tempfile
+import os
 
 import shutil
 import subprocess
@@ -12,6 +15,9 @@ from mutagen.id3 import (
     TRCK, TDRC, APIC,
 )
 from mutagen.mp3 import MP3
+
+import sys
+import importlib.util
 
 from core.job import Job, IdentityHint
 from core.states import PipelineState
@@ -29,10 +35,79 @@ from core.app_config import AppConfig
 # =========================
 
 class PipelineError(Exception):
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, category: Literal["TRANSIENT", "CONTENT", "DEPENDENCY"] | None = None):
         self.code = code
         self.message = message
+        self.category = category
         super().__init__(message)
+
+
+# =========================
+# Tool Resolution & Exec
+# =========================
+
+def _resolve_tool(
+    tool_bin_name: str,
+    python_module: str | None = None,
+) -> tuple[list[str], str]:
+    """
+    Resolves a tool to a base command and source.
+    """
+    # 1. Try app-controlled environment (venv)
+    if python_module:
+        spec = importlib.util.find_spec(python_module)
+        if spec:
+            return [sys.executable, "-m", python_module], "venv"
+
+    # 2. Fallback to system binary
+    resolved_bin = shutil.which(tool_bin_name)
+    if resolved_bin:
+        return [resolved_bin], "system"
+
+    # 3. Failure
+    raise PipelineError(
+        "EXTERNAL_TOOL_NOT_FOUND",
+        f"Could not resolve tool '{tool_bin_name}' (module={python_module})"
+    )
+
+
+def _run_tool(
+    job: Job,
+    tool_bin_name: str,
+    base_cmd: list[str],
+    args: list[str],
+    source: str,
+    python_module: str | None,
+    **kwargs
+) -> None:
+    """
+    Executes a tool command and records metadata.
+    """
+    full_cmd = base_cmd + args
+    
+    # Record Metadata
+    invocation_meta = {
+        "tool": tool_bin_name,
+        "source": source,
+        "module": python_module,
+        "cmd": full_cmd,
+    }
+    
+    if not hasattr(job, "tool_invocations"):
+        job.tool_invocations = []
+    job.tool_invocations.append(invocation_meta)
+    
+    try:
+        subprocess.run(
+            full_cmd,
+            check=True,
+            **kwargs
+        )
+    except (subprocess.CalledProcessError, OSError) as e:
+        raise PipelineError(
+            "EXTERNAL_TOOL_ERROR",
+            f"Execution of '{tool_bin_name}' failed: {str(e)}"
+        ) from e
 
 
 # =========================
@@ -74,7 +149,15 @@ class Pipeline:
             )
 
         prev = job.current_state
-        handler(job)
+        try:
+            handler(job)
+        except PipelineError:
+            raise
+        except Exception as e:
+            raise PipelineError(
+                "UNEXPECTED_ERROR",
+                str(e)
+            ) from e
 
         if job.current_state == prev:
             raise PipelineError(
@@ -170,24 +253,40 @@ def handle_searching(job: Job):
 # -------------------------------------------------
 
 def handle_downloading(job: Job):
+    # 1. Pre-step Cleanup (Atomicity Illusion)
+    # Ensure fresh start by wiping the step workspace
+    temp_dir = ensure_job_temp_dir(job.job_id)
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir)
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    job.temp_dir = str(temp_dir)
+
+    # 2. Timestamp Recording (Start)
+    if not hasattr(job, "step_started_at"):
+        job.step_started_at = {}
+    job.step_started_at[job.current_state.name] = datetime.now(timezone.utc)
+
     if job.options.dry_run:
         job.result.success = True
         job.result.title = job.identity_hint.title
         job.result.artist = ", ".join(job.identity_hint.artists)
         job.result.source = "dry-run"
         job.result.path = "(not written)"
+        
+        # Timestamp Recording (End - Dry Run)
+        if not hasattr(job, "step_finished_at"):
+            job.step_finished_at = {}
+        job.step_finished_at[job.current_state.name] = datetime.now(timezone.utc)
+
         job.transition_to(PipelineState.FINALIZED)
         return
 
     job.emit(f"Downloading: {job.selected_source['title']}")
 
-    temp_dir = ensure_job_temp_dir(job.job_id)
-    job.temp_dir = str(temp_dir)
-
+    # temp_dir is already set up and fresh
     output_template = str(temp_dir / "%(title)s.%(ext)s")
 
-    cmd = [
-        "yt-dlp",
+    args = [
         job.selected_source["url"],
         "-f", "bestaudio",
         "--extract-audio",
@@ -196,18 +295,38 @@ def handle_downloading(job: Job):
         "--quiet",
     ]
 
-    subprocess.run(
-        cmd,
-        check=True,
-        stdout=None if job.options.verbose else subprocess.DEVNULL,
-        stderr=None if job.options.verbose else subprocess.DEVNULL,
-    )
+    try:
+        base_cmd, source = _resolve_tool("yt-dlp", python_module="yt_dlp")
+    except PipelineError as e:
+        # Context: Tool resolution failed
+        raise PipelineError(e.code, e.message, category="DEPENDENCY") from e
+
+    try:
+        _run_tool(
+            job,
+            tool_bin_name="yt-dlp",
+            base_cmd=base_cmd,
+            args=args,
+            source=source,
+            python_module="yt_dlp",
+            stdout=None if job.options.verbose else subprocess.DEVNULL,
+            stderr=None if job.options.verbose else subprocess.DEVNULL,
+        )
+    except PipelineError as e:
+        # Context: Tool execution failed (likely content issue for yt-dlp)
+        raise PipelineError(e.code, e.message, category="CONTENT") from e
 
     files = [p for p in temp_dir.iterdir() if p.is_file()]
     if not files:
-        raise PipelineError("NO_FILE", "yt-dlp produced no output")
+        raise PipelineError("NO_FILE", "yt-dlp produced no output", category="CONTENT")
 
     job.downloaded_file = str(files[0])
+
+    # 3. Timestamp Recording (End)
+    if not hasattr(job, "step_finished_at"):
+        job.step_finished_at = {}
+    job.step_finished_at[job.current_state.name] = datetime.now(timezone.utc)
+
     job.transition_to(PipelineState.EXTRACTING)
 
 
@@ -216,19 +335,69 @@ def handle_downloading(job: Job):
 # -------------------------------------------------
 
 def handle_extracting(job: Job):
+    # 1. Pre-step Cleanup (Atomicity Illusion) with Input Preservation
+    temp_dir = ensure_job_temp_dir(job.job_id)
+    
+    preserved_input_path = None
+    backup_path = None
+
+    # Check if we need to save the input file from the blast zone
+    if job.downloaded_file:
+        input_file = Path(job.downloaded_file)
+        if input_file.exists() and temp_dir in input_file.parents:
+            # Create a safe stash outside the blast zone
+            backup_path = Path(tempfile.mkdtemp()) / input_file.name
+            shutil.move(input_file, backup_path)
+            preserved_input_path = input_file  # Remember where it was
+
+    # Nuke it
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir)
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    job.temp_dir = str(temp_dir)
+
+    # Restore logic
+    if preserved_input_path and backup_path and backup_path.exists():
+        # Ensure the subdirectory structure exists if it was deep (unlikely but safe)
+        preserved_input_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(backup_path, preserved_input_path)
+        shutil.rmtree(backup_path.parent) # Cleanup the stash dir
+
+    # 2. Timestamp Recording (Start)
+    if not hasattr(job, "step_started_at"):
+        job.step_started_at = {}
+    job.step_started_at[job.current_state.name] = datetime.now(timezone.utc)
+
     job.emit("Converting audio to MP3 (320kbps)")
 
     input_path = Path(job.downloaded_file)
     output_path = input_path.with_suffix(".mp3")
 
-    subprocess.run(
-        ["ffmpeg", "-y", "-i", job.downloaded_file, "-ab", "320k", str(output_path)],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    args = ["-y", "-i", job.downloaded_file, "-ab", "320k", str(output_path)]
+    
+    try:
+        base_cmd, source = _resolve_tool("ffmpeg")
+        _run_tool(
+            job,
+            tool_bin_name="ffmpeg",
+            base_cmd=base_cmd,
+            args=args,
+            source=source,
+            python_module=None,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except PipelineError as e:
+        # Context: Any failure in ffmpeg (resolution or exec) is DEPENDENCY
+        raise PipelineError(e.code, e.message, category="DEPENDENCY") from e
 
     job.extracted_file = str(output_path)
+
+    # 3. Timestamp Recording (End)
+    if not hasattr(job, "step_finished_at"):
+        job.step_finished_at = {}
+    job.step_finished_at[job.current_state.name] = datetime.now(timezone.utc)
+
     job.transition_to(PipelineState.MATCHING_METADATA)
 
 

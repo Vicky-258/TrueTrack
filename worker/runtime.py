@@ -1,4 +1,6 @@
+import os
 import time
+import shutil
 import logging
 import threading
 from typing import Optional
@@ -182,6 +184,7 @@ class Worker:
             PipelineState.FINALIZED,
             PipelineState.FAILED,
         ):
+            self._cleanup_temp_dir(job)
             job.release_lock()
             self.store.update(job)
 
@@ -201,6 +204,30 @@ class Worker:
         logging.info(
             f"Job {job.job_id} advanced to {job.current_state.name}"
         )
+
+    def _cleanup_temp_dir(self, job: Job) -> None:
+        """
+        Safely delete temporary directory for completed jobs.
+        
+        Rules:
+        - Only for FINALIZED or FAILED jobs
+        - Only if job.temp_dir is set and exists
+        - Best-effort, no exceptions raised
+        """
+        # Safety Guard: STRICTLY only for terminal states
+        if job.current_state not in (PipelineState.FINALIZED, PipelineState.FAILED):
+            return
+
+        if not job.temp_dir:
+            return
+
+        try:
+            if os.path.exists(job.temp_dir):
+                shutil.rmtree(job.temp_dir)
+                logging.info(f"Cleaned up temp dir for job {job.job_id}: {job.temp_dir}")
+        except Exception as e:
+            # Cleanup failure is non-fatal
+            logging.error(f"Failed to cleanup temp dir {job.temp_dir} for job {job.job_id}: {e}")
 
 # -------------------------------------------------
 # WorkerRuntime (LIFECYCLE CONTROL ONLY)
