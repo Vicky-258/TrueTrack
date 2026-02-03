@@ -115,24 +115,31 @@ case "$COMMAND" in
 
         export HOSTNAME="${TRUETRACK_HOST:-127.0.0.1}"
         export PORT="${TRUETRACK_PORT:-3000}" 
-        # Note: Frontend internal port is hardcoded to 3001 in app.py logic, 
-        # but here we might want to respect the user's PORT env if valid?
-        # Actually app.py starts it on 3001 internally if used as a subprocess.
-        # But if we are running it directly, we should adhere to how standalone next works.
-        # Let's match app.py logic: PORT=3001 for internal, but wait, the user wants 
-        # the main app on TRUETRACK_PORT (8000 usually).
-        # The frontend defaults to 3000 strict.
-        # Wait, the architecture is: FastAPI (8000) -> proxies to Next (3001)? 
-        # OR Next (3000) -> requests FastAPI?
-        # Let's check app.py again carefully.
-        # app.py: starts next on PORT=3001. app.py (FastAPI) runs on TRUETRACK_PORT (8000).
-        # So we must launch Next on 3001.
         
         (cd "$FRONTEND_DIR" && PORT=3001 nohup node "$NEXT_SERVER" >> "$FRONTEND_LOG" 2>&1 & echo $! > "$FRONTEND_PID_FILE")
         echo "Started Frontend (PID $(cat $FRONTEND_PID_FILE))"
 
         echo "TrueTrack started."
         echo "Web UI: http://${TRUETRACK_HOST:-127.0.0.1}:${TRUETRACK_PORT:-8000}"
+        echo "Web UI: http://${TRUETRACK_HOST:-127.0.0.1}:${TRUETRACK_PORT:-8000}"
+        ;;
+
+    doctor)
+        # 1. Verify Virtual Environment
+        if [[ ! -d ".venv" ]]; then
+            echo "Error: Virtual environment not found in $SCRIPT_DIR"
+            exit 1
+        fi
+        
+        # 2. Load .env (best-effort)
+        if [[ -f ".env" ]]; then
+            set -a
+            source ".env"
+            set +a
+        fi
+        
+        # 3. Run Doctor directly (foreground)
+        "$SCRIPT_DIR/.venv/bin/python3" -m cli.doctor "${@:2}"
         ;;
 
     stop)
@@ -204,6 +211,7 @@ case "$COMMAND" in
         echo "  start   Start TrueTrack (Backend, Worker, Frontend)"
         echo "  stop    Stop all TrueTrack processes"
         echo "  status  Show process status and Web UI URL"
+        echo "  doctor  Check system health and fix dependencies"
         echo "  help    Show this help message"
         echo ""
         echo "Environment Variables (optional):"
@@ -214,7 +222,7 @@ case "$COMMAND" in
         ;;
 
     *)
-        echo "Usage: $0 {start|stop|status|help}"
+        echo "Usage: $0 {start|stop|status|doctor|help}"
         exit 1
         ;;
 esac

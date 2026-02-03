@@ -110,7 +110,7 @@ class Worker:
             pipeline.step(job)
 
         except PipelineError as e:
-            job.fail(e.code, e.message)
+            job.fail(e.code, e.message, category=e.category, tool=e.tool)
             job.release_lock()
             self.store.update(job)
 

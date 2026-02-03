@@ -68,6 +68,8 @@ def build_status(job: Job) -> JobStatusResponse:
         response.error = {
             "code": job.error_code,
             "message": job.error_message,
+            "category": job.error_category,
+            "tool": job.error_tool,
         }
 
     if job.final_metadata:

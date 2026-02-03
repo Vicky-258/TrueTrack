@@ -35,10 +35,11 @@ from core.app_config import AppConfig
 # =========================
 
 class PipelineError(Exception):
-    def __init__(self, code: str, message: str, category: Literal["TRANSIENT", "CONTENT", "DEPENDENCY"] | None = None):
+    def __init__(self, code: str, message: str, category: Literal["TRANSIENT", "CONTENT", "DEPENDENCY"] | None = None, tool: str | None = None):
         self.code = code
         self.message = message
         self.category = category
+        self.tool = tool  # Descriptive metadata only
         super().__init__(message)
 
 
@@ -106,7 +107,8 @@ def _run_tool(
     except (subprocess.CalledProcessError, OSError) as e:
         raise PipelineError(
             "EXTERNAL_TOOL_ERROR",
-            f"Execution of '{tool_bin_name}' failed: {str(e)}"
+            f"Execution of '{tool_bin_name}' failed: {str(e)}",
+            tool=tool_bin_name
         ) from e
 
 
@@ -299,7 +301,7 @@ def handle_downloading(job: Job):
         base_cmd, source = _resolve_tool("yt-dlp", python_module="yt_dlp")
     except PipelineError as e:
         # Context: Tool resolution failed
-        raise PipelineError(e.code, e.message, category="DEPENDENCY") from e
+        raise PipelineError(e.code, e.message, category="DEPENDENCY", tool="yt-dlp") from e
 
     try:
         _run_tool(
@@ -314,7 +316,7 @@ def handle_downloading(job: Job):
         )
     except PipelineError as e:
         # Context: Tool execution failed (likely content issue for yt-dlp)
-        raise PipelineError(e.code, e.message, category="CONTENT") from e
+        raise PipelineError(e.code, e.message, category="CONTENT", tool="yt-dlp") from e
 
     files = [p for p in temp_dir.iterdir() if p.is_file()]
     if not files:
@@ -389,7 +391,7 @@ def handle_extracting(job: Job):
         )
     except PipelineError as e:
         # Context: Any failure in ffmpeg (resolution or exec) is DEPENDENCY
-        raise PipelineError(e.code, e.message, category="DEPENDENCY") from e
+        raise PipelineError(e.code, e.message, category="DEPENDENCY", tool="ffmpeg") from e
 
     job.extracted_file = str(output_path)
 

@@ -91,6 +91,8 @@ class Job:
     failed_state: Optional[PipelineState] = None
     error_code: Optional[str] = None
     error_message: Optional[str] = None
+    error_category: Optional[str] = None
+    error_tool: Optional[str] = None
     retry_count: int = 0
 
     identity_hint: Optional[IdentityHint] = None
@@ -135,12 +137,14 @@ class Job:
 
         self.updated_at = now
 
-    def fail(self, code: str, message: str) -> None:
+    def fail(self, code: str, message: str, category: Optional[str] = None, tool: Optional[str] = None) -> None:
         now = datetime.now(timezone.utc)
 
         self.failed_state = self.current_state
         self.error_code = code
         self.error_message = message
+        self.error_category = category
+        self.error_tool = tool
         self.current_state = PipelineState.FAILED
 
         if self.state_history:
@@ -199,6 +203,8 @@ class Job:
             "failed_state": self.failed_state.name if self.failed_state else None,
             "error_code": self.error_code,
             "error_message": self.error_message,
+            "error_category": self.error_category,
+            "error_tool": self.error_tool,
             "retry_count": self.retry_count,
 
             "identity_hint": asdict(self.identity_hint) if self.identity_hint else None,
@@ -246,6 +252,8 @@ class Job:
 
         job.error_code = data.get("error_code")
         job.error_message = data.get("error_message")
+        job.error_category = data.get("error_category")
+        job.error_tool = data.get("error_tool")
         job.retry_count = data.get("retry_count", 0)
 
         if data.get("identity_hint"):

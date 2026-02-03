@@ -565,6 +565,8 @@ function Main {
     Write-Log -Level INFO "  1. Double-click 'TrueTrack' on your Desktop"
     Write-Log -Level INFO "  2. Run 'truetrack start' in any terminal"
     Write-Log -Level INFO "--------------------------------------------------"
+    Write-Log -Level INFO "Note: We recommend running 'truetrack doctor' before starting for the first time."
+    Write-Log -Level INFO "--------------------------------------------------"
 }
 
 # Run Main
