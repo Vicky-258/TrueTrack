@@ -511,6 +511,9 @@ def handle_storage(job: Job):
     artist = safe_filename(job.final_metadata["artistName"])
     final_path = library_root / f"{title} - {artist}.mp3"
 
+    # -------------------------------------------------
+    # If file already exists → treat as finalized
+    # -------------------------------------------------
     if final_path.exists():
         job.result.success = True
         job.result.title = title
@@ -519,12 +522,25 @@ def handle_storage(job: Job):
         job.result.source = "library"
         job.result.path = str(final_path)
         job.result.reason = "already_exists"
-    
+
         job.transition_to(PipelineState.FINALIZED)
         return
 
-    shutil.move(job.extracted_file, final_path)
+    # -------------------------------------------------
+    # Atomic Move Strategy
+    # -------------------------------------------------
+    extracted_path = Path(job.extracted_file)
 
+    # Safety: ensure source exists
+    if not extracted_path.exists():
+        raise RuntimeError("Extracted file missing before storage step")
+
+    # Atomic replace (safe overwrite, atomic on same filesystem)
+    os.replace(extracted_path, final_path)
+
+    # -------------------------------------------------
+    # Persist result
+    # -------------------------------------------------
     job.result.success = True
     job.result.title = title
     job.result.artist = artist
@@ -533,6 +549,7 @@ def handle_storage(job: Job):
     job.result.path = str(final_path)
 
     job.transition_to(PipelineState.FINALIZED)
+
 
 
 # -------------------------------------------------
