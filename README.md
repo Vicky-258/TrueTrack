@@ -59,22 +59,47 @@ The installer will:
 4. Build the project.
 5. Offer to create a **Desktop Launcher** and **Global Command** (`truetrack`).
 
----
+## 🪟 Windows Support Status
 
-## 🚧 Windows Support Status
+TrueTrack runs on Windows, and the installer (`install.ps1`) sets up the required environment (Python, Node.js, `uv`, etc.).
 
-The Windows installer (`install.ps1`) has been significantly improved and should reliably set up your environment (including `uv`, Python, and Node.js). 
+The core application works reliably when started manually. However, the PowerShell automation wrappers (`install.ps1`, `run.ps1`, global command setup) are still being refined and may occasionally require manual intervention.
 
-However, the **application runtime on Windows** is currently under investigation. While the installation may succeed, you might encounter stability issues when running the application.
+If automated startup fails:
 
-If the app fails to start or behaves unexpectedly on Windows, please:
-1. Run `truetrack doctor` to check for issues.
-2. Check the logs in `%LOCALAPPDATA%\TrueTrack\logs`.
+1. Open PowerShell.
+2. Navigate to the TrueTrack project directory (the folder containing `app.py`, `worker/`, `frontend/`, etc.).
+3. Start components manually:
 
-**What you can do:**
-*   **Wait for updates**: I am actively investigating these issues.
-*   **Report bugs**: If you can pinpoint the cause of a failure, please [open an issue](https://github.com/vicky-258/TrueTrack/issues).
-*   **Contribute**: If you are comfortable with Windows development and find a fix, pull requests are highly welcome!
+   ```powershell
+   # Backend
+   .\.venv\Scripts\python.exe app.py
+
+   # Worker (in another terminal)
+   .\.venv\Scripts\python.exe worker\main.py
+
+   # Frontend (if built by installer)
+   node frontend\.next\standalone\server.js
+   ```
+
+For diagnostics:
+
+```powershell
+truetrack doctor
+```
+
+Logs are located at:
+
+```
+%LOCALAPPDATA%\TrueTrack\logs
+```
+
+Linux and macOS are currently the primary tested platforms.
+
+If you encounter issues on Windows:
+
+* Please open an issue: [https://github.com/vicky-258/TrueTrack/issues](https://github.com/vicky-258/TrueTrack/issues)
+* Contributions to improve the PowerShell tooling are welcome.
 
 ---
 
