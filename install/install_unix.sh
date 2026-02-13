@@ -62,7 +62,7 @@ main() {
         # PROMPT ASSUMPTION: This script resides in the repo.
         # Copying self to target.
         mkdir -p "$target_dir"
-        cp -r "$PROJECT_ROOT/"* "$target_dir/"
+        cp -r "$PROJECT_ROOT"/. "$target_dir/"
         log_success "Repository installed to $target_dir"
         
         # Re-exec from target to ensure paths align

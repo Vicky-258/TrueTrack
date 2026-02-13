@@ -355,7 +355,7 @@ function Main {
                }
                
                # SELECTIVE COPY (Protect User Data)
-               $Items = Get-ChildItem -Path $ProjectRoot
+               $Items = Get-ChildItem -Path $ProjectRoot -Force
                foreach ($Item in $Items) {
                    $DestPath = Join-Path $InstallDir $Item.Name
                    

@@ -25,6 +25,7 @@ from core.scoring import score_metadata
 
 from utils.paths import ensure_job_temp_dir
 from utils.metadata import search_itunes
+from utils.safe_move import safe_move
 from utils.storage import ensure_dir, safe_filename
 from utils.tagging import fetch_album_art
 from core.app_config import AppConfig
@@ -442,7 +443,7 @@ def handle_matching_metadata(job: Job):
     job.final_metadata = scored[0]
     job.metadata_confidence = scored[0]["_score"]
 
-    if job.metadata_confidence < 60:
+    if job.metadata_confidence < 80:
         job.transition_to(PipelineState.USER_METADATA_SELECTION)
         return
 
@@ -536,7 +537,7 @@ def handle_storage(job: Job):
         raise RuntimeError("Extracted file missing before storage step")
 
     # Atomic replace (safe overwrite, atomic on same filesystem)
-    os.replace(extracted_path, final_path)
+    safe_move(extracted_path, final_path)
 
     # -------------------------------------------------
     # Persist result
@@ -568,7 +569,7 @@ def handle_archiving(job: Job):
     artist = safe_filename(hint.artists[0] if hint.artists else "Unknown")
 
     final_path = archive_dir / f"{title} - {artist}.mp3"
-    shutil.move(job.extracted_file, final_path)
+    safe_move(job.extracted_file, final_path)
 
     job.result.archived = True
     job.result.title = hint.title

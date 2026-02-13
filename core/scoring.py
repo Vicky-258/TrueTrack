@@ -1,48 +1,20 @@
-def score_candidate(candidate: dict, artist: str) -> tuple[int, list[str]]:
-    score = 0
-    reasons = []
+import re
 
-    title = candidate["title"].lower()
-    uploader = (candidate.get("uploader") or "").lower()
-    duration = candidate.get("duration") or 0
-    artist = artist.lower()
 
-    # uploader signal
-    if artist in uploader:
-        score += 30
-        reasons.append("uploader matches artist")
+def normalize(text: str) -> str:
+    return re.sub(r"\s+", " ", text.lower().strip())
 
-    # title signals
-    if "official audio" in title:
-        score += 40
-        reasons.append("official audio")
 
-    if "remaster" in title:
-        score += 5
-        reasons.append("remaster")
+def token_overlap(a: str, b: str) -> float:
+    a_tokens = set(normalize(a).split())
+    b_tokens = set(normalize(b).split())
 
-    if "lyrics" in title:
-        score -= 30
-        reasons.append("lyrics video")
+    if not a_tokens or not b_tokens:
+        return 0.0
 
-    if "live" in title:
-        score -= 40
-        reasons.append("live version")
+    intersection = a_tokens & b_tokens
+    return len(intersection) / max(len(a_tokens), len(b_tokens))
 
-    if "full album" in title:
-        score -= 100
-        reasons.append("full album")
-
-    # duration signals
-    if 300 <= duration <= 500:
-        score += 10
-        reasons.append("expected song duration")
-
-    if duration > 900:
-        score -= 80
-        reasons.append("suspiciously long duration")
-
-    return score, reasons
 
 def score_metadata(
     result: dict,
@@ -50,23 +22,74 @@ def score_metadata(
     expected_artist: str,
     expected_duration: int,
 ) -> tuple[int, list[str]]:
+
     score = 0
     reasons = []
 
-    # title match
-    if expected_title.lower() in result.get("trackName", "").lower():
-        score += 40
-        reasons.append("title match")
+    track_name = result.get("trackName", "")
+    artist_name = result.get("artistName", "")
+    actual_ms = result.get("trackTimeMillis")
 
-    # artist match
-    if expected_artist.lower() in result.get("artistName", "").lower():
-        score += 40
-        reasons.append("artist match")
+    if not track_name or not artist_name or not actual_ms:
+        return -1, ["missing critical metadata"]
 
-    # duration match
-    actual = result.get("trackTimeMillis")
-    if actual and abs(actual / 1000 - expected_duration) < 5:
-        score += 20
-        reasons.append("duration match")
+    track_name_n = normalize(track_name)
+    artist_name_n = normalize(artist_name)
+    expected_title_n = normalize(expected_title)
+    expected_artist_n = normalize(expected_artist)
+
+    # -------------------------
+    # HARD GATE: Duration
+    # -------------------------
+    delta = abs((actual_ms / 1000) - expected_duration)
+
+    if delta > 7:
+        return -1, [f"duration mismatch ({delta:.1f}s)"]
+
+    score += 30
+    reasons.append("duration within 7s")
+
+    # -------------------------
+    # Title similarity (token-based)
+    # -------------------------
+    title_sim = token_overlap(expected_title_n, track_name_n)
+
+    if title_sim < 0.6:
+        return -1, [f"weak title similarity ({title_sim:.2f})"]
+
+    score += int(title_sim * 40)
+    reasons.append(f"title similarity {title_sim:.2f}")
+
+    # -------------------------
+    # Artist similarity
+    # -------------------------
+    artist_sim = token_overlap(expected_artist_n, artist_name_n)
+
+    if artist_sim < 0.5:
+        return -1, [f"weak artist similarity ({artist_sim:.2f})"]
+
+    score += int(artist_sim * 30)
+    reasons.append(f"artist similarity {artist_sim:.2f}")
+
+    # -------------------------
+    # Penalize dangerous variants
+    # -------------------------
+    lowered = track_name_n
+
+    if "live" in lowered:
+        score -= 40
+        reasons.append("live version penalty")
+
+    if "remix" in lowered:
+        score -= 40
+        reasons.append("remix penalty")
+
+    if "karaoke" in lowered:
+        score -= 60
+        reasons.append("karaoke penalty")
+
+    if "instrumental" in lowered:
+        score -= 30
+        reasons.append("instrumental penalty")
 
     return score, reasons

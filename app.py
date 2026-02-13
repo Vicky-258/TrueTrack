@@ -48,9 +48,9 @@ def main() -> None:
     - start ASGI server
     """
 
-    host = os.getenv("TRUETRACK_HOST", "127.0.0.1")
-    port = int(os.getenv("TRUETRACK_PORT", "8000"))
-    log_level = os.getenv("TRUETRACK_LOG_LEVEL", "info")
+    host = os.getenv("TRUETRACK_HOST") or "127.0.0.1"
+    port = int(os.getenv("TRUETRACK_PORT") or 8000)
+    log_level = os.getenv("TRUETRACK_LOG_LEVEL") or "info"
 
     logging.basicConfig(
         level=log_level.upper(),

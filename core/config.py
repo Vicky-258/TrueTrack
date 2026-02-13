@@ -1,9 +1,12 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env file into environment
+load_dotenv()
 
 class Config:
 
-    # Raw environment variable fallback (optional)
     ENV_MUSIC_LIBRARY_ROOT = os.getenv("MUSIC_LIBRARY_ROOT")
 
     try:
@@ -17,4 +20,3 @@ class Config:
     ITUNES_MAX_RETRIES = 3
     ITUNES_TIMEOUT = 10
     ALBUM_ART_TIMEOUT = 10
-    

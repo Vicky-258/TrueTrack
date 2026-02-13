@@ -10,7 +10,7 @@ from typing import NoReturn
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
 
-from infra.sqlite_job_store import SqliteJobStore
+from infra.sqlite_job_store import SQLiteJobStore
 from worker.runtime import WorkerRuntime
 
 def main() -> None:
@@ -37,7 +37,7 @@ def main() -> None:
     try:
         # We don't need to run migrations here as the API/Installer handles that
         # But for robustness, we could, but let's assume schema exists.
-        store = SqliteJobStore(db_path)
+        store = SQLiteJobStore(db_path)
     except Exception as e:
         logging.critical(f"Failed to initialize JobStore: {e}")
         sys.exit(1)
