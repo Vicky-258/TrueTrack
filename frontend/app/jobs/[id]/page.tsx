@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
+
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
@@ -204,7 +205,8 @@ export default function JobPage() {
           {/* Album art */}
           <div className="shrink-0 relative group">
             {job.final_metadata.artworkUrl100 ? (
-              <img
+              <Image
+                unoptimized
                 src={job.final_metadata.artworkUrl100.replace("100x100", "600x600")}
                 alt="Album art"
                 width={160}
@@ -334,6 +336,7 @@ export default function JobPage() {
                 >
                   {m.artworkUrl100 ? (
                     <Image
+                      unoptimized
                       src={m.artworkUrl100}
                       alt=""
                       width={48}
@@ -362,7 +365,8 @@ export default function JobPage() {
               ))}
             </div>
           </section>
-        )}
+        )
+      }
 
       {/* Debug Info */}
       <div className="pt-8 border-t border-zinc-800">
@@ -380,7 +384,7 @@ export default function JobPage() {
           </pre>
         )}
       </div>
-    </main>
+    </main >
   );
 }
 
