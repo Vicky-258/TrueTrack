@@ -453,6 +453,18 @@ function Main {
                 # Don't exit, maybe user wants to fix manually.
             } else {
                 Write-Log -Level SUCCESS "Frontend built."
+                
+                # Ensure static assets for standalone
+                Write-Log -Level INFO "Copying static assets for standalone mode..."
+                $StandaloneNext = ".next\standalone\.next"
+                if (-not (Test-Path $StandaloneNext)) { New-Item -ItemType Directory -Force -Path $StandaloneNext | Out-Null }
+                
+                if (Test-Path ".next\static") {
+                     Copy-Item -Recurse -Force -Path ".next\static" -Destination "$StandaloneNext"
+                }
+                if (Test-Path "public") {
+                     Copy-Item -Recurse -Force -Path "public" -Destination ".next\standalone"
+                }
             }
             
             Set-Location ".."

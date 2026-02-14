@@ -123,12 +123,18 @@ def create_app(*, host: str, port: int) -> FastAPI:
     
     NEXT_STATIC_DIR = Path(__file__).resolve().parent.parent / "frontend" / ".next" / "static"
     
+    print(f"[DEBUG] NEXT_STATIC_DIR resolved to: {NEXT_STATIC_DIR}")
+    print(f"[DEBUG] NEXT_STATIC_DIR exists: {NEXT_STATIC_DIR.exists()}")
+    
     if NEXT_STATIC_DIR.exists():
+        print(f"[DEBUG] Mounting static files at /_next/static")
         app.mount(
             "/_next/static",
             StaticFiles(directory=NEXT_STATIC_DIR),
             name="next-static",
         )
+    else:
+        print(f"[DEBUG] Static directory missing. Skipping mount.")
 
     # ----------------------------------
     # Middleware

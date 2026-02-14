@@ -131,6 +131,13 @@ main() {
     pnpm install
     log_info "Building Frontend..."
     pnpm build
+    
+    # Ensure static assets are copied for standalone mode
+    log_info "Copying static assets for standalone mode..."
+    mkdir -p .next/standalone/.next
+    cp -r .next/static .next/standalone/.next/ || true
+    cp -r public .next/standalone/ || true
+    
     cd ..
 
     # --------------------------------------------------------------------------
