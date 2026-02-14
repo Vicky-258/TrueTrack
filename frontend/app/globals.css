@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "tailwindcss-animate";
 
 :root {
   --background: #0B1215;
@@ -24,8 +25,12 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-mono: monospace;
+}
+
+@utility animate-spin-slow {
+  animation: spin 3s linear infinite;
 }
 
 body {

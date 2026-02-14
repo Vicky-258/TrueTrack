@@ -1,111 +1,63 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { useJobs } from "@/hooks/useJobs";
+import { JobCard } from "@/components/jobs/JobCard";
+import { Loader2, Plus } from "lucide-react";
 import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
-import { ArrowRight, CheckCircle2, XCircle, Clock, Disc3, Archive } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { JobStatusResponse } from "@/types/job";
 
-export default function HistoryPage() {
-  const [jobs, setJobs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function JobsPage() {
+  const { jobs, isLoading, isError } = useJobs();
 
-  useEffect(() => {
-    api<any[]>("/jobs")
-      .then(setJobs)
-      .catch((err) => console.error(err))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 animate-pulse space-y-4">
-        <div className="w-12 h-12 rounded-full border-4 border-zinc-800 border-t-primary animate-spin" />
-        <p className="text-zinc-500 font-medium">Loading history...</p>
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-zinc-500" size={24} />
       </div>
-    )
+    );
   }
 
+  if (isError) {
+    return (
+      <div className="p-4 rounded-lg border border-red-900/50 bg-red-900/10 text-red-200">
+        Failed to load jobs. Is the backend running?
+      </div>
+    );
+  }
+
+  // Filter active vs completed could be done here or in separate tabs, 
+  // but for now just list all as per request "Jobs List Page"
+
+  const sortedJobs = [...(jobs || [])].sort((a, b) => {
+    // Sort by most recent activity
+    const aTime = Math.max(...Object.values({ ...a.step_started_at, ...a.step_finished_at }).map(t => new Date(t).getTime()));
+    const bTime = Math.max(...Object.values({ ...b.step_started_at, ...b.step_finished_at }).map(t => new Date(t).getTime()));
+    return bTime - aTime;
+  });
+
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <header className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">Download History</h1>
-        <p className="text-muted-foreground">
-          View and manage your recent downloads.
-        </p>
-      </header>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold tracking-tight">Jobs</h1>
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-zinc-100 text-zinc-900 text-sm font-medium hover:bg-zinc-200 transition-colors"
+        >
+          <Plus size={16} />
+          New Job
+        </Link>
+      </div>
 
-      <div className="grid gap-3">
-        {jobs.length === 0 ? (
-          <div className="text-center py-20 border border-dashed border-zinc-800 rounded-xl bg-zinc-900/30">
-            <Disc3 className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-zinc-400">No jobs found</h3>
-            <p className="text-zinc-500 text-sm mt-1">Start a new download to get started.</p>
-            <Link href="/" className="inline-block mt-4 text-primary hover:text-primary/80 text-sm font-medium">
-              Start a download &rarr;
-            </Link>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {sortedJobs.map((job) => (
+          <JobCard key={job.job_id} job={job} />
+        ))}
+        {sortedJobs.length === 0 && (
+          <div className="col-span-full py-12 text-center text-zinc-500 border border-dashed border-zinc-800 rounded-xl">
+            No jobs found
           </div>
-        ) : (
-          jobs.map((job) => (
-            <Link
-              key={job.job_id}
-              href={`/jobs/${job.job_id}`}
-              className="group relative flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 hover:bg-zinc-900 hover:border-zinc-700 transition-all"
-            >
-              <div className="flex items-start gap-4">
-                <StatusIcon job={job} />
-                <div className="space-y-1">
-                  <div className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                    {job.title || job.query || "Unknown Track"}
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground/70">
-                    <span className="flex items-center gap-1" title={new Date(job.created_at).toLocaleString()}>
-                      <Clock size={12} />
-                      {formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}
-                    </span>
-                    <span className="w-1 h-1 rounded-full bg-border" />
-                    <span className="font-mono text-muted-foreground/60 uppercase">
-                      {(job.status === 'success' && (job.result?.archived || job.result?.reason === 'already_exists'))
-                        ? 'ARCHIVED'
-                        : job.state}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 text-sm md:text-right">
-                {/* Optional: Add more info here, e.g. artist if available */}
-                {job.artist && (
-                  <div className="hidden md:block text-muted-foreground/60 font-medium max-w-[150px] truncate">
-                    {job.artist}
-                  </div>
-                )}
-
-                <ArrowRight
-                  size={18}
-                  className="text-zinc-600 group-hover:text-primary group-hover:translate-x-1 transition-all ml-auto md:ml-0"
-                />
-              </div>
-            </Link>
-          ))
         )}
       </div>
     </div>
   );
-}
-
-function StatusIcon({ job }: { job: any }) {
-  const isArchived = job.status === 'success' && (job.result?.archived || job.result?.reason === 'already_exists');
-
-  if (isArchived) {
-    return <div className="p-2 rounded-full bg-orange-500/10 text-orange-500"><Archive size={20} /></div>
-  }
-  if (job.status === 'success') {
-    return <div className="p-2 rounded-full bg-secondary/10 text-secondary"><CheckCircle2 size={20} /></div>
-  }
-  if (job.status === 'error' || job.status === 'cancelled') {
-    return <div className="p-2 rounded-full bg-destructive/10 text-destructive"><XCircle size={20} /></div>
-  }
-  return <div className="p-2 rounded-full bg-primary/10 text-primary"><Disc3 size={20} className="animate-spin" /></div>
 }
