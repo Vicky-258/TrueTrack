@@ -16,4 +16,5 @@ class PipelineState(Enum):
     FINALIZED = auto()
     ARCHIVING = auto()
     CANCELLED = auto()
+    RETRY_PAUSED = auto()
     FAILED = auto()

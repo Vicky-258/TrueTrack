@@ -281,6 +281,7 @@ def create_app(*, host: str, port: int) -> FastAPI:
         if (
             job.current_state != PipelineState.CANCELLED
             and not job.current_state.name.startswith("USER_")
+            and job.current_state != PipelineState.RETRY_PAUSED
         ):
             raise HTTPException(status_code = 400, detail = "Job cannot be resumed")
 
@@ -291,6 +292,8 @@ def create_app(*, host: str, port: int) -> FastAPI:
         job.error_message = None
         job.current_state = job.resume_from
         job.resume_from = None
+        job.retry_count = 0
+        job.next_run_at = None
 
         store.update(job)
         return build_status(job)

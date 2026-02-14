@@ -238,11 +238,20 @@ class Job:
             options=JobOptions(**data.get("options", {})),
         )
 
-        job.current_state = PipelineState[data["current_state"]]
-        job.state_history = [
-            StateRecord.from_dict(s)
-            for s in data.get("state_history", [])
-        ]
+        try:
+            job.current_state = PipelineState[data["current_state"]]
+        except KeyError:
+            # Handle invalid state (corruption/manual tampering)
+            job.current_state = PipelineState.FAILED
+            job.error_code = "STATE_CORRUPTION"
+            job.error_message = f"Invalid state encountered: {data.get('current_state')}"
+            
+        job.state_history = []
+        for s in data.get("state_history", []):
+            try:
+                job.state_history.append(StateRecord.from_dict(s))
+            except (KeyError, ValueError):
+                continue
 
         job.created_at = ensure_utc(datetime.fromisoformat(data["created_at"]))
         job.updated_at = ensure_utc(datetime.fromisoformat(data["updated_at"]))

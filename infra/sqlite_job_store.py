@@ -1,7 +1,7 @@
 import sqlite3
 import json
 from typing import Optional, Iterable, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from infra.job_store import JobStore
 from core.job import Job
@@ -15,6 +15,7 @@ def is_runnable(job: Job) -> bool:
         PipelineState.FINALIZED,
         PipelineState.FAILED,
         PipelineState.CANCELLED,
+        PipelineState.RETRY_PAUSED
     ):
         return False
 
@@ -124,25 +125,34 @@ class SQLiteJobStore(JobStore):
         """
         Return the job_id of the next runnable job.
 
-        Ordering:
-        - oldest updated first (fairness)
+        Optimized to filter in SQL to avoid O(N) deserialization.
+        """
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        lock_cutoff = (now - timedelta(seconds=LOCK_TTL_SECONDS)).isoformat()
+
+        query = """
+            SELECT job_id
+            FROM jobs
+            WHERE 
+                json_extract(data, '$.current_state') NOT IN ('FINALIZED', 'FAILED', 'CANCELLED', 'RETRY_PAUSED')
+                AND json_extract(data, '$.current_state') NOT LIKE 'USER_%'
+                AND (
+                    json_extract(data, '$.next_run_at') IS NULL 
+                    OR json_extract(data, '$.next_run_at') <= ?
+                )
+                AND (
+                    json_extract(data, '$.locked_at') IS NULL 
+                    OR json_extract(data, '$.locked_at') <= ?
+                )
+            ORDER BY updated_at ASC
+            LIMIT 1
         """
 
         with sqlite3.connect(self.db_path) as conn:
-            rows = conn.execute(
-                """
-                SELECT job_id, data
-                FROM jobs
-                ORDER BY updated_at ASC
-                """
-            ).fetchall()
+            row = conn.execute(query, (now_iso, lock_cutoff)).fetchone()
 
-        for job_id, raw in rows:
-            job = Job.from_dict(json.loads(raw))
-            if is_runnable(job):
-                return job_id
-
-        return None
+        return row[0] if row else None
 
     def list(self) -> Iterable[str]:
         with sqlite3.connect(self.db_path) as conn:

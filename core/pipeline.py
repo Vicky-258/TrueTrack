@@ -323,7 +323,11 @@ def handle_downloading(job: Job):
     if not files:
         raise PipelineError("NO_FILE", "yt-dlp produced no output", category="CONTENT")
 
-    job.downloaded_file = str(files[0])
+    final_file = files[0]
+    if final_file.stat().st_size == 0:
+        raise PipelineError("EMPTY_FILE", "yt-dlp produced a 0-byte file", category="CONTENT")
+
+    job.downloaded_file = str(final_file)
 
     # 3. Timestamp Recording (End)
     if not hasattr(job, "step_finished_at"):
@@ -338,46 +342,48 @@ def handle_downloading(job: Job):
 # -------------------------------------------------
 
 def handle_extracting(job: Job):
-    # 1. Pre-step Cleanup (Atomicity Illusion) with Input Preservation
     temp_dir = ensure_job_temp_dir(job.job_id)
-    
-    preserved_input_path = None
-    backup_path = None
-
-    # Check if we need to save the input file from the blast zone
-    if job.downloaded_file:
-        input_file = Path(job.downloaded_file)
-        if input_file.exists() and temp_dir in input_file.parents:
-            # Create a safe stash outside the blast zone
-            backup_path = Path(tempfile.mkdtemp()) / input_file.name
-            shutil.move(input_file, backup_path)
-            preserved_input_path = input_file  # Remember where it was
-
-    # Nuke it
-    if temp_dir.exists():
-        shutil.rmtree(temp_dir)
-    temp_dir.mkdir(parents=True, exist_ok=True)
     job.temp_dir = str(temp_dir)
 
-    # Restore logic
-    if preserved_input_path and backup_path and backup_path.exists():
-        # Ensure the subdirectory structure exists if it was deep (unlikely but safe)
-        preserved_input_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(backup_path, preserved_input_path)
-        shutil.rmtree(backup_path.parent) # Cleanup the stash dir
+    input_path = Path(job.downloaded_file) if job.downloaded_file else None
 
-    # 2. Timestamp Recording (Start)
+    # -------------------------------------------------
+    # 1. Guard: Ensure input exists
+    # -------------------------------------------------
+    if not input_path or not input_path.exists():
+        job.emit("Downloaded file missing — restarting download step")
+        job.transition_to(PipelineState.DOWNLOADING)
+        return
+
+    # -------------------------------------------------
+    # 2. Prepare output path (idempotent behavior)
+    # -------------------------------------------------
+    output_path = input_path.with_suffix(".mp3")
+
+    # If previous extraction attempt left partial output, remove it
+    if output_path.exists():
+        try:
+            output_path.unlink()
+        except Exception:
+            # If unable to clean old output, treat as dependency failure
+            raise PipelineError(
+                "EXTRACT_CLEANUP_FAILED",
+                "Unable to remove previous extracted file",
+                category="DEPENDENCY",
+                tool="ffmpeg"
+            )
+
+    # -------------------------------------------------
+    # 3. Timestamp (Start)
+    # -------------------------------------------------
     if not hasattr(job, "step_started_at"):
         job.step_started_at = {}
     job.step_started_at[job.current_state.name] = datetime.now(timezone.utc)
 
     job.emit("Converting audio to MP3 (320kbps)")
 
-    input_path = Path(job.downloaded_file)
-    output_path = input_path.with_suffix(".mp3")
+    args = ["-y", "-i", str(input_path), "-ab", "320k", str(output_path)]
 
-    args = ["-y", "-i", job.downloaded_file, "-ab", "320k", str(output_path)]
-    
     try:
         base_cmd, source = _resolve_tool("ffmpeg")
         _run_tool(
@@ -391,12 +397,29 @@ def handle_extracting(job: Job):
             stderr=subprocess.DEVNULL,
         )
     except PipelineError as e:
-        # Context: Any failure in ffmpeg (resolution or exec) is DEPENDENCY
-        raise PipelineError(e.code, e.message, category="DEPENDENCY", tool="ffmpeg") from e
+        raise PipelineError(
+            e.code,
+            e.message,
+            category="DEPENDENCY",
+            tool="ffmpeg"
+        ) from e
+
+    # -------------------------------------------------
+    # 4. Success Validation
+    # -------------------------------------------------
+    if not output_path.exists():
+        raise PipelineError(
+            "EXTRACT_NO_OUTPUT",
+            "ffmpeg did not produce an output file",
+            category="DEPENDENCY",
+            tool="ffmpeg"
+        )
 
     job.extracted_file = str(output_path)
 
-    # 3. Timestamp Recording (End)
+    # -------------------------------------------------
+    # 5. Timestamp (End)
+    # -------------------------------------------------
     if not hasattr(job, "step_finished_at"):
         job.step_finished_at = {}
     job.step_finished_at[job.current_state.name] = datetime.now(timezone.utc)
@@ -569,7 +592,18 @@ def handle_archiving(job: Job):
     artist = safe_filename(hint.artists[0] if hint.artists else "Unknown")
 
     final_path = archive_dir / f"{title} - {artist}.mp3"
-    safe_move(job.extracted_file, final_path)
+    
+    # -------------------------------------------------
+    # Crash Recovery: Check if already moved
+    # -------------------------------------------------
+    # If the source file is gone but destination exists, we likely crashed
+    # after the move but before DB update. Treat as success.
+    source_path = Path(job.extracted_file)
+    if final_path.exists() and not source_path.exists():
+        job.emit("Resuming from crash: Archived file already moved")
+    else:
+        # Atomic move (overwrites if destination exists but source also exists)
+        safe_move(job.extracted_file, final_path)
 
     job.result.archived = True
     job.result.title = hint.title
