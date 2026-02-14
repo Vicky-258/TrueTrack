@@ -12,7 +12,7 @@ interface JobDetailViewProps {
 }
 
 export function JobDetailView({ job }: JobDetailViewProps) {
-    const isFailed = job.current_state.toLowerCase().includes("failed");
+    const isFailed = job.state.toLowerCase().includes("failed");
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
@@ -31,7 +31,7 @@ export function JobDetailView({ job }: JobDetailViewProps) {
                         <div className="text-xs text-zinc-600 font-mono">
                             ID: {job.job_id.slice(0, 8)}
                         </div>
-                        <StateBadge state={job.current_state} className="text-sm px-3 py-1" />
+                        <StateBadge state={job.state} className="text-sm px-3 py-1" />
                     </div>
                 </div>
             </div>

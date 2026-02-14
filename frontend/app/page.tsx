@@ -152,7 +152,7 @@ export default function Home() {
                     {formatDistanceToNow(new Date(job.created_at || new Date()), { addSuffix: true })}
                   </span>
                 </div>
-                <StateBadge state={job.current_state} className="opacity-70 group-hover:opacity-100" />
+                <StateBadge state={job.state || job.status} className="opacity-70 group-hover:opacity-100" />
               </Link>
             ))}
           </div>

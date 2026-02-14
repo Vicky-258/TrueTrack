@@ -15,7 +15,7 @@ const colorMap: Record<string, string> = {
 };
 
 export function StateBadge({ state, className }: StateBadgeProps) {
-    const normalizedState = state.toLowerCase();
+    const normalizedState = (state || "unknown").toLowerCase();
 
     let variant = "default";
 

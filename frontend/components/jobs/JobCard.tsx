@@ -11,8 +11,8 @@ interface JobCardProps {
 
 export function JobCard({ job }: JobCardProps) {
     // Determine if we should show a specific icon based on state
-    const isFailed = job.current_state.toLowerCase().includes("failed");
-    const isPaused = job.current_state.toLowerCase().includes("paused");
+    const isFailed = job.state.toLowerCase().includes("failed");
+    const isPaused = job.state.toLowerCase().includes("paused");
 
     // Find the latest step timestamp for "Updated x ago"
     const timestamps = { ...job.step_started_at, ...job.step_finished_at };
@@ -31,7 +31,7 @@ export function JobCard({ job }: JobCardProps) {
                         </h3>
                         <p className="text-sm text-zinc-500">{job.artist || "Unknown Artist"}</p>
                     </div>
-                    <StateBadge state={job.current_state} />
+                    <StateBadge state={job.state} />
                 </div>
 
                 <div className="flex items-center gap-4 text-xs text-zinc-500 mt-4">
