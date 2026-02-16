@@ -8,6 +8,9 @@ import { ArrowRight, Settings2, CloudDownload, Terminal, Archive, Sparkles, Sear
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { StateBadge } from "@/components/ui/StateBadge";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function Home() {
   const [query, setQuery] = useState("");
@@ -59,48 +62,54 @@ export default function Home() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-12 pt-10">
+    <div className="max-w-2xl mx-auto space-y-12 pt-16">
 
-      {/* Search Section */}
+      {/* Intro / Search Section */}
       <div className="space-y-6">
-        <h1 className="text-xl font-semibold text-zinc-100">New Ingestion</h1>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">New Ingestion</h1>
+          <p className="text-sm text-muted-foreground mt-1">Start a new pipeline job from a URL or search query.</p>
+        </div>
 
-        <div className="relative">
-          <div className="flex items-center bg-zinc-900 border border-zinc-700/50 rounded-lg p-2 focus-within:ring-1 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all">
-            <Search className="ml-3 text-zinc-500" size={20} />
-            <input
-              className="flex-1 bg-transparent border-none text-base px-4 py-2 text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-0"
-              placeholder="Enter URL or search query..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") submit();
-              }}
-              autoFocus
-            />
-            <button
+        <div className="relative group">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors group-focus-within:text-primary" size={18} />
+          <Input
+            className="pl-10 h-12 text-base shadow-sm border-muted-foreground/20 focus-visible:ring-primary"
+            placeholder="Enter URL or search query..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+            }}
+            autoFocus
+          />
+          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+            <Button
               onClick={submit}
               disabled={loading || !query.trim()}
-              className="px-4 py-2 rounded-md bg-zinc-100 text-zinc-900 font-medium hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              size="sm"
+              className="h-8 w-8 p-0 rounded-md"
             >
               {loading ? (
-                <div className="w-5 h-5 border-2 border-zinc-900/30 border-t-zinc-900 rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
               ) : (
-                <ArrowRight size={18} />
+                <ArrowRight size={16} />
               )}
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Options Toggle */}
         <div className="space-y-4">
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setShowOptions(!showOptions)}
-            className="text-xs font-medium text-zinc-500 hover:text-zinc-300 flex items-center gap-1.5 transition-colors"
+            className="text-xs text-muted-foreground hover:text-foreground h-auto py-1 px-2 -ml-2"
           >
-            <Settings2 size={12} />
+            <Settings2 size={12} className="mr-1.5" />
             {showOptions ? "Hide Options" : "Show Options"}
-          </button>
+          </Button>
 
           {showOptions && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -135,25 +144,29 @@ export default function Home() {
 
       {/* Recent History */}
       {recentJobs.length > 0 && (
-        <div className="space-y-4 pt-8 border-t border-zinc-800/50">
-          <h2 className="text-sm font-semibold text-zinc-400">Recent Activity</h2>
+        <div className="space-y-4 pt-8 border-t border-border">
+          <h2 className="text-sm font-medium text-muted-foreground">Recent Activity</h2>
           <div className="space-y-2">
             {recentJobs.map((job) => (
-              <Link
-                key={job.job_id}
-                href={`/jobs/${job.job_id}`}
-                className="flex items-center justify-between p-3 rounded-lg border border-zinc-800/50 hover:bg-zinc-900 hover:border-zinc-700 transition-colors group"
-              >
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-medium text-sm text-zinc-200 group-hover:text-blue-400 transition-colors truncate max-w-[300px]">
-                    {job.title || job.query || "Unknown Track"}
-                  </span>
-                  <span className="text-xs text-zinc-500">
-                    {formatDistanceToNow(new Date(job.created_at || new Date()), { addSuffix: true })}
-                  </span>
-                </div>
-                <StateBadge state={job.state || job.status} className="opacity-70 group-hover:opacity-100" />
-              </Link>
+              <Card key={job.job_id} className="group hover:border-primary/20 transition-colors">
+                <Link href={`/jobs/${job.job_id}`}>
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div className="flex flex-col gap-1 overflow-hidden">
+                      <span className="font-medium text-sm text-foreground group-hover:text-primary transition-colors truncate">
+                        {job.title || job.query || "Unknown Track"}
+                      </span>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <span>ID: {job.job_id.substring(0, 8)}</span>
+                        <span>•</span>
+                        <span>{formatDistanceToNow(new Date(job.created_at || new Date()), { addSuffix: true })}</span>
+                      </div>
+                    </div>
+                    <div className="ml-4 shrink-0">
+                      <StateBadge state={job.state || job.status} />
+                    </div>
+                  </CardContent>
+                </Link>
+              </Card>
             ))}
           </div>
         </div>
@@ -167,10 +180,10 @@ function OptionToggle({ active, onChange, label, icon: Icon }: any) {
     <button
       onClick={() => onChange(!active)}
       className={cn(
-        "flex items-center gap-3 p-3 rounded-md text-left transition-all border text-sm",
+        "flex items-center gap-3 p-3 rounded-lg text-left transition-all duration-200 border text-sm",
         active
-          ? "bg-blue-500/10 border-blue-500/20 text-blue-400"
-          : "bg-zinc-900/40 border-zinc-800 text-zinc-500 hover:bg-zinc-900 hover:text-zinc-400"
+          ? "bg-primary/10 border-primary/20 text-primary"
+          : "bg-transparent border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground"
       )}
     >
       <Icon size={16} />

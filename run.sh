@@ -35,6 +35,9 @@ FRONTEND_LOG="$LOG_DIR/frontend.log"
 # Default command
 COMMAND="${1:-start}"
 
+# Internal Configuration
+FRONTEND_PORT="${TRUETRACK_FRONTEND_PORT:-3001}"
+
 # ----------------------------------------------------------------------
 # Helpers
 # ----------------------------------------------------------------------
@@ -43,12 +46,64 @@ check_pid() {
     local pid_file="$1"
     if [ -f "$pid_file" ]; then
         local pid=$(cat "$pid_file")
-        if kill -0 "$pid" 2>/dev/null; then
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
             echo "$pid"
             return 0
         fi
     fi
     return 1
+}
+
+get_process_cmdline() {
+    local pid="$1"
+    if [ -f "/proc/$pid/cmdline" ]; then
+        # Linux
+        tr '\0' ' ' < "/proc/$pid/cmdline"
+    else
+        # Fallback / macOS
+        ps -p "$pid" -o args=
+    fi
+}
+
+safe_kill_by_port() {
+    local port="$1"
+    local pid=""
+    
+    # Try finding PID by port (lsof -> ss -> netstat)
+    # Use || true to prevent set -e from exiting if command finds nothing
+    if [ -z "$pid" ] && command -v lsof >/dev/null; then
+        pid=$(lsof -t -i :"$port" -sTCP:LISTEN 2>/dev/null | head -n 1 || true)
+    fi
+    
+    if [ -z "$pid" ] && command -v ss >/dev/null; then
+        # Check specific port constraint to avoid loose grep matches
+        pid=$(ss -lptn "sport = :$port" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d= -f2 | head -n 1 || true)
+        # echo "DEBUG: ss pid=$pid"
+    fi
+
+    if [ -z "$pid" ] && command -v netstat >/dev/null; then
+        # Parse netstat output for PID/Program name column
+        # Output format: proto ... local_addr ... state pid/program
+        pid=$(netstat -tulpn 2>/dev/null | grep ":$port " | awk '{print $NF}' | cut -d/ -f1 | grep -E '^[0-9]+$' | head -n 1 || true)
+        # echo "DEBUG: netstat pid=$pid"
+    fi
+
+    if [ -n "$pid" ]; then
+        local cmd=$(get_process_cmdline "$pid")
+        # echo "DEBUG: cmd=$cmd"
+        # Verify it's a node process running our server
+        if [[ "$cmd" == *"node"* ]] && [[ "$cmd" == *"server.js"* ]]; then
+            echo "Found orphaned frontend on port $port (PID $pid). Stopping..."
+            kill "$pid" 2>/dev/null || true
+            return 0
+        else
+            echo "Warning: Process $pid is listening on port $port but doesn't look like TrueTrack (Cmd: $cmd). Skipping."
+            # Return 0 to avoid triggering set -e if we voluntarily skip
+            return 0
+        fi
+    fi
+    # If no PID found, return 0 (success in doing nothing) or handle explicitly
+    return 0
 }
 
 # ----------------------------------------------------------------------
@@ -91,17 +146,17 @@ case "$COMMAND" in
         export TRUETRACK_SKIP_FRONTEND=1
         
         # Backend
-        nohup python3 app.py >> "$API_LOG" 2>&1 &
+        # Use python directly to avoid nohup wrapper issues, redirect explicitly
+        python3 app.py >> "$API_LOG" 2>&1 &
         echo $! > "$API_PID_FILE"
         echo "Started Backend (PID $(cat $API_PID_FILE))"
 
         # Worker
-        nohup python3 worker/main.py >> "$WORKER_LOG" 2>&1 &
+        python3 worker/main.py >> "$WORKER_LOG" 2>&1 &
         echo $! > "$WORKER_PID_FILE"
         echo "Started Worker (PID $(cat $WORKER_PID_FILE))"
 
         # Frontend
-        # Frontend path resolution logic from app.py
         FRONTEND_DIR="$SCRIPT_DIR/frontend"
         NEXT_SERVER="$FRONTEND_DIR/.next/standalone/server.js"
         if [ ! -f "$NEXT_SERVER" ]; then
@@ -116,11 +171,19 @@ case "$COMMAND" in
         export HOSTNAME="${TRUETRACK_HOST:-127.0.0.1}"
         export PORT="${TRUETRACK_PORT:-3000}" 
         
-        (cd "$FRONTEND_DIR" && PORT=3001 nohup node "$NEXT_SERVER" >> "$FRONTEND_LOG" 2>&1 & echo $! > "$FRONTEND_PID_FILE")
-        echo "Started Frontend (PID $(cat $FRONTEND_PID_FILE))"
+        # Start Frontend without subshell backgrounding to capture correct PID
+        # We cd in a subshell but run node directly, or just use full path if possible.
+        # Node standalone usually expects cwd to be the standalone dir for resolution
+        (
+            cd "$FRONTEND_DIR"
+            PORT="$FRONTEND_PORT" node "$NEXT_SERVER" >> "$FRONTEND_LOG" 2>&1 &
+            echo $! > "$FRONTEND_PID_FILE"
+        )
+        # Capture the PID written by the subshell
+        
+        echo "Started Frontend (PID $(cat $FRONTEND_PID_FILE)) on port $FRONTEND_PORT"
 
         echo "TrueTrack started."
-        echo "Web UI: http://${TRUETRACK_HOST:-127.0.0.1}:${TRUETRACK_PORT:-8000}"
         echo "Web UI: http://${TRUETRACK_HOST:-127.0.0.1}:${TRUETRACK_PORT:-8000}"
         ;;
 
@@ -149,19 +212,29 @@ case "$COMMAND" in
         stop_process() {
             local name=$1
             local pid_file=$2
-            if pid=$(check_pid "$pid_file"); then
+            local pid=$(check_pid "$pid_file" || true)
+            if [ -n "$pid" ]; then
                 echo "Stopping $name ($pid)..."
                 kill "$pid" 2>/dev/null || true
                 rm -f "$pid_file"
                 STOPPED=1
             else
-                [ -f "$pid_file" ] && rm -f "$pid_file" # Clean stale
+                # Clean stale pid file if it exists, safely
+                if [ -f "$pid_file" ]; then
+                    rm -f "$pid_file"
+                fi
             fi
         }
 
         stop_process "Backend" "$API_PID_FILE"
         stop_process "Worker" "$WORKER_PID_FILE"
         stop_process "Frontend" "$FRONTEND_PID_FILE"
+
+        # Extra safety check for Frontend by Port
+        # Extra safety check for Frontend by Port
+        if safe_kill_by_port "$FRONTEND_PORT"; then
+             STOPPED=1 
+        fi
 
         if [ "$STOPPED" -eq 1 ]; then
             echo "TrueTrack stopped."
@@ -176,7 +249,8 @@ case "$COMMAND" in
         check_component() {
             local name=$1
             local pid_file=$2
-            if pid=$(check_pid "$pid_file"); then
+            local pid=$(check_pid "$pid_file" || true)
+            if [ -n "$pid" ]; then
                 echo "$name: RUNNING (PID $pid)"
                 RUNNING_COUNT=$((RUNNING_COUNT + 1))
             else
@@ -215,9 +289,10 @@ case "$COMMAND" in
         echo "  help    Show this help message"
         echo ""
         echo "Environment Variables (optional):"
-        echo "  TRUETRACK_HOST      Host to bind (default: 127.0.0.1)"
-        echo "  TRUETRACK_PORT      Port for Web UI (default: 8000)"
-        echo "  TRUETRACK_DB_PATH   Path to SQLite DB"
+        echo "  TRUETRACK_HOST           Host to bind (default: 127.0.0.1)"
+        echo "  TRUETRACK_PORT           Port for Web UI (default: 8000)"
+        echo "  TRUETRACK_FRONTEND_PORT  Internal Frontend Port (default: 3001)"
+        echo "  TRUETRACK_DB_PATH        Path to SQLite DB"
         exit 0
         ;;
 

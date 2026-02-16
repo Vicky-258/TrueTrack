@@ -61,6 +61,8 @@ class JobStatusResponse(BaseModel):
     )
     
     final_metadata: Optional[Dict[str, Any]] = None
+    title: Optional[str] = None
+    artist: Optional[str] = None
     can_resume: bool = False
 
 class JobSummaryResponse(BaseModel):

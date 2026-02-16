@@ -17,27 +17,25 @@ const colorMap: Record<string, string> = {
 export function StateBadge({ state, className }: StateBadgeProps) {
     const normalizedState = (state || "unknown").toLowerCase();
 
-    let variant = "default";
+    // Map states to semantic styles defined in globals.css or Tailwind classes
+    // Rules: Subtle background (10-15%), matching text, no pulse.
+    let styles = "bg-zinc-500/10 text-zinc-400 border-zinc-500/20"; // Default/Pending
 
-    if (["downloading", "extracting", "encoding", "tagging", "pending"].some(s => normalizedState.includes(s))) {
-        variant = "active";
-    } else if (normalizedState === "finalized") {
-        variant = "finalized";
-    } else if (normalizedState.includes("failed")) {
-        variant = "failed";
-    } else if (normalizedState.includes("paused") || normalizedState.includes("retry")) {
-        variant = "paused";
+    if (["running", "downloading", "extracting", "encoding", "tagging"].some(s => normalizedState.includes(s))) {
+        styles = "bg-indigo-500/15 text-indigo-400 border-indigo-500/20";
+    } else if (normalizedState === "finalized" || normalizedState === "completed") {
+        styles = "bg-emerald-500/15 text-emerald-400 border-emerald-500/20";
+    } else if (normalizedState.includes("failed") || normalizedState.includes("error")) {
+        styles = "bg-red-500/15 text-red-400 border-red-500/20";
     }
-
-    const styles = colorMap[variant] || colorMap.default;
 
     return (
         <span className={cn(
-            "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border",
+            "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border transition-colors duration-200",
             styles,
             className
         )}>
-            {state.replace(/_/g, " ")}
+            {state?.replace(/_/g, " ") || "Unknown"}
         </span>
     );
 }

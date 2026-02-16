@@ -12,6 +12,11 @@ export interface JobStatusResponse {
     step_finished_at: Record<string, string>;
     metadata_confidence: number | null;
     archived: boolean;
+    can_resume?: boolean;
+    input_required?: {
+        type: string;
+        choices: any[];
+    };
     result: {
         path: string | null
     }

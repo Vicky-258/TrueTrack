@@ -3,6 +3,7 @@
 import { useJobs } from "@/hooks/useJobs";
 import { JobCard } from "@/components/jobs/JobCard";
 import { Loader2, Archive } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function ArchivedPage() {
     const { jobs, isLoading, isError } = useJobs();
@@ -10,16 +11,18 @@ export default function ArchivedPage() {
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-64">
-                <Loader2 className="animate-spin text-zinc-500" size={24} />
+                <Loader2 className="animate-spin text-muted-foreground" size={24} />
             </div>
         );
     }
 
     if (isError) {
         return (
-            <div className="p-4 rounded-lg border border-red-900/50 bg-red-900/10 text-red-200">
-                Failed to load jobs.
-            </div>
+            <Card className="border-destructive/50 bg-destructive/10">
+                <CardContent className="p-4 text-destructive">
+                    Failed to load jobs.
+                </CardContent>
+            </Card>
         );
     }
 
@@ -34,10 +37,10 @@ export default function ArchivedPage() {
     return (
         <div className="space-y-6">
             <div className="flex items-center gap-2">
-                <div className="p-2 bg-zinc-900 rounded-lg text-zinc-400">
+                <div className="p-2 bg-muted/20 rounded-lg text-muted-foreground">
                     <Archive size={20} />
                 </div>
-                <h1 className="text-2xl font-semibold tracking-tight">Archived Jobs</h1>
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground">Archived Jobs</h1>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -45,7 +48,7 @@ export default function ArchivedPage() {
                     <JobCard key={job.job_id} job={job} />
                 ))}
                 {sortedJobs.length === 0 && (
-                    <div className="col-span-full py-12 text-center text-zinc-500 border border-dashed border-zinc-800 rounded-xl">
+                    <div className="col-span-full py-12 text-center text-muted-foreground border border-dashed border-border rounded-xl">
                         No archived jobs found
                     </div>
                 )}

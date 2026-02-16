@@ -14,10 +14,10 @@ export function DebugPanel({ data, title = "Debug Info", className }: DebugPanel
     const [isOpen, setIsOpen] = useState(false);
 
     return (
-        <div className={cn("rounded-lg border border-zinc-800 bg-zinc-900/50 overflow-hidden", className)}>
+        <div className={cn("rounded-lg border border-border bg-muted/30 overflow-hidden", className)}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
             >
                 {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 <Terminal size={12} />
@@ -25,8 +25,8 @@ export function DebugPanel({ data, title = "Debug Info", className }: DebugPanel
             </button>
 
             {isOpen && (
-                <div className="p-3 bg-zinc-950 border-t border-zinc-800 overflow-x-auto">
-                    <pre className="text-[10px] leading-relaxed font-mono text-zinc-400">
+                <div className="p-3 bg-card border-t border-border overflow-x-auto">
+                    <pre className="text-[10px] leading-relaxed font-mono text-muted-foreground">
                         {JSON.stringify(data, null, 2)}
                     </pre>
                 </div>

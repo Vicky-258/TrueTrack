@@ -1,17 +1,48 @@
 @import "tailwindcss";
-@plugin "tailwindcss-animate";
+/* @plugin "tailwindcss-animate"; */
 
 :root {
-  --background: #0B1215;
-  --foreground: #E6F1F5;
-  --surface: #101A1F;
-  --primary: #2DD4BF;
-  --primary-foreground: #0B1215;
-  --secondary: #22C55E;
-  --destructive: #F87171;
-  --muted: #101A1F;
-  --muted-foreground: #9FB3BD;
-  --border: #1F2E35;
+  /* Refined Zinc/Indigo Palette */
+  --background: #09090b;
+  /* zinc-950 */
+  --foreground: #e4e4e7;
+  /* zinc-200 */
+  --surface: #18181b;
+  /* zinc-900 */
+  --primary: #6366f1;
+  /* indigo-500 */
+  --primary-foreground: #ffffff;
+  --secondary: #27272a;
+  /* zinc-800 */
+  --secondary-foreground: #e4e4e7;
+  --destructive: #ef4444;
+  /* red-500 */
+  --muted: #52525b;
+  /* zinc-600 */
+  --muted-foreground: #a1a1aa;
+  /* zinc-400 */
+  --border: #27272a;
+  /* zinc-800 */
+
+  /* Semantic Tokens for State Badges */
+  --state-pending-bg: rgba(113, 113, 122, 0.1);
+  /* zinc-500 / 10% */
+  --state-pending-text: #a1a1aa;
+
+  --state-running-bg: rgba(99, 102, 241, 0.15);
+  /* indigo-500 / 15% */
+  --state-running-text: #818cf8;
+  /* indigo-400 */
+
+  --state-success-bg: rgba(16, 185, 129, 0.15);
+  /* emerald-500 / 15% */
+  --state-success-text: #34d399;
+  /* emerald-400 */
+
+  --state-error-bg: rgba(239, 68, 68, 0.15);
+  /* red-500 / 15% */
+  --state-error-text: #f87171;
+  /* red-400 */
 }
 
 @theme inline {
@@ -21,6 +52,7 @@
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
   --color-destructive: var(--destructive);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
@@ -29,8 +61,22 @@
   --font-mono: monospace;
 }
 
-@utility animate-spin-slow {
-  animation: spin 3s linear infinite;
+@layer utilities {
+  .card {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    transition: all 0.2s ease-out;
+  }
+
+  .card:hover {
+    border-color: color-mix(in srgb, var(--border), white 10%);
+    transform: translateY(-1px);
+  }
+
+  .animate-spin-slow {
+    animation: spin 3s linear infinite;
+  }
 }
 
 body {
@@ -51,16 +97,18 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #3f3f46;
+  background: #27272a;
+  /* zinc-800 */
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
+  background: #3f3f46;
+  /* zinc-700 */
 }
 
-/* Remove default focus ring and replace with custom */
+/* Focus Ring */
 :focus-visible {
-  outline: 2px solid #3b82f6;
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }

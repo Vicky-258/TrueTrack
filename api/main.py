@@ -48,11 +48,26 @@ def build_status(job: Job) -> JobStatusResponse:
         and job.resume_from is not None
     )
 
+    title = None
+    artist = None
+
+    if job.final_metadata:
+        title = job.final_metadata.get("trackName")
+        artist = job.final_metadata.get("artistName")
+    elif job.identity_hint:
+        title = job.identity_hint.title
+        artist = job.identity_hint.artists[0] if job.identity_hint.artists else None
+    elif job.result and job.result.title:
+        title = job.result.title
+        artist = job.result.artist
+
     response = JobStatusResponse(
         job_id=job.job_id,
         state=job.current_state.name,
         status=status,
         can_resume=can_resume,
+        title=title,
+        artist=artist,
     )
 
     if status == "waiting":

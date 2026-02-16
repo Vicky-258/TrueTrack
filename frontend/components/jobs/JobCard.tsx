@@ -3,6 +3,7 @@ import { Clock, RotateCcw, AlertTriangle, FileAudio } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { type JobStatusResponse } from "@/types/job";
 import { StateBadge } from "@/components/ui/StateBadge";
+import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 interface JobCardProps {
@@ -19,44 +20,43 @@ export function JobCard({ job }: JobCardProps) {
     const latestTimestamp = Object.values(timestamps).sort().pop();
 
     return (
-        <Link
-            href={`/jobs/${job.job_id}`}
-            className="block group"
-        >
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-5 hover:bg-zinc-900/80 hover:border-zinc-700 transition-all cursor-pointer">
-                <div className="flex justify-between items-start mb-3">
-                    <div className="flex flex-col gap-1">
-                        <h3 className="font-medium text-zinc-100 group-hover:text-white truncate max-w-[300px] sm:max-w-md">
-                            {job.title || "Unknown Title"}
-                        </h3>
-                        <p className="text-sm text-zinc-500">{job.artist || "Unknown Artist"}</p>
+        <Link href={`/jobs/${job.job_id}`} className="block group">
+            <Card className="h-full hover:border-primary/20 transition-all">
+                <div className="p-5">
+                    <div className="flex justify-between items-start mb-3">
+                        <div className="flex flex-col gap-1 overflow-hidden pr-2">
+                            <h3 className="font-medium text-foreground group-hover:text-primary transition-colors truncate">
+                                {job.title || "Unknown Title"}
+                            </h3>
+                            <p className="text-sm text-muted-foreground truncate">{job.artist || "Unknown Artist"}</p>
+                        </div>
+                        <StateBadge state={job.state} className="shrink-0" />
                     </div>
-                    <StateBadge state={job.state} />
+
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground mt-4">
+                        {latestTimestamp && (
+                            <div className="flex items-center gap-1.5">
+                                <Clock size={14} />
+                                <span>{formatDistanceToNow(new Date(latestTimestamp), { addSuffix: true })}</span>
+                            </div>
+                        )}
+
+                        {job.retry_count > 0 && (
+                            <div className={cn("flex items-center gap-1.5", isFailed ? "text-destructive" : "text-amber-500")}>
+                                <RotateCcw size={14} />
+                                <span>{job.retry_count} retries</span>
+                            </div>
+                        )}
+
+                        {job.result?.path && (
+                            <div className="flex items-center gap-1.5 text-emerald-500">
+                                <FileAudio size={14} />
+                                <span>Ready</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
-
-                <div className="flex items-center gap-4 text-xs text-zinc-500 mt-4">
-                    {latestTimestamp && (
-                        <div className="flex items-center gap-1.5">
-                            <Clock size={14} />
-                            <span>{formatDistanceToNow(new Date(latestTimestamp), { addSuffix: true })}</span>
-                        </div>
-                    )}
-
-                    {job.retry_count > 0 && (
-                        <div className={cn("flex items-center gap-1.5", isFailed ? "text-red-400" : "text-amber-400")}>
-                            <RotateCcw size={14} />
-                            <span>{job.retry_count} retries</span>
-                        </div>
-                    )}
-
-                    {job.result?.path && (
-                        <div className="flex items-center gap-1.5 text-emerald-500/80">
-                            <FileAudio size={14} />
-                            <span>Ready</span>
-                        </div>
-                    )}
-                </div>
-            </div>
+            </Card>
         </Link>
     );
 }
