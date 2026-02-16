@@ -10,7 +10,7 @@ interface JobTimelineProps {
 const STEPS = ["PENDING", "DOWNLOADING", "EXTRACTING", "ENCODING", "TAGGING", "FINALIZED"];
 
 export function JobTimeline({ job }: JobTimelineProps) {
-    const currentState = job.current_state.toUpperCase();
+    const currentState = job.state.toUpperCase();
     const history = job.step_finished_at || {};
     const started = job.step_started_at || {};
 

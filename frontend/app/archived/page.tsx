@@ -23,7 +23,7 @@ export default function ArchivedPage() {
         );
     }
 
-    const archivedJobs = (jobs || []).filter(j => j.archived || j.current_state === "FINALIZED");
+    const archivedJobs = (jobs || []).filter(j => j.archived || j.state === "FINALIZED");
 
     const sortedJobs = [...archivedJobs].sort((a, b) => {
         const aTime = Math.max(...Object.values({ ...a.step_started_at, ...a.step_finished_at }).map(t => new Date(t).getTime()));

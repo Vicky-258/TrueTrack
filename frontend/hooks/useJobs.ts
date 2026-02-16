@@ -19,7 +19,7 @@ export function useJob(id: string) {
     const { data, error, isLoading } = useSWR<JobStatusResponse>(id ? `/api/jobs/${id}` : null, fetcher, {
         refreshInterval: (data) => {
             // Stop polling if finalized or failed
-            if (data && (data.current_state === "FINALIZED" || data.current_state.includes("FAILED"))) {
+            if (data && (data.state === "FINALIZED" || data.state.includes("FAILED"))) {
                 return 0;
             }
             return 2000;
